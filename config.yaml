@@ -1,0 +1,18 @@
+# AIRAC Data Fetcher configuration
+# Copy to config.local.yaml for user-specific overrides (gitignored).
+
+workspace_base: "C:\\Users\\jkino\\Desktop\\SRD Testing Files"
+archive_repo: "C:\\Users\\jkino\\Documents\\GitHub\\airac-data"
+
+sources:
+  nats_srd:
+    page_url: ""          # NATS SRD download page URL — TBD
+    sheet_name: "SRD"     # Main sheet to export as CSV
+    notes_sheet: "Notes"  # Notes sheet to export as CSV (optional)
+  vatsim_sct:
+    url: ""               # VATSIM UK SCT download URL — TBD
+  eaip:
+    page_url: ""          # UK eAIP download page URL — TBD
+    files:
+      - "EG-ENR-3.2-en-GB.html"
+      - "EG-ENR-3.3-en-GB.html"
