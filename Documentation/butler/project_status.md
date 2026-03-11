@@ -1,11 +1,11 @@
 # AIRAC Data Fetcher — Project Status
 
-## Current Project State (2026-03-11, Session 9)
+## Current Project State (2026-03-11, Session 10)
 
 ### System Status: FEATURE-COMPLETE
 
 **Branch:** `first-try`
-**Tests:** 263 (all passing)
+**Tests:** 204 (all passing)
 **Dependencies:** requests, beautifulsoup4, openpyxl, pyyaml, click, pytest
 
 ### What Exists
@@ -36,17 +36,11 @@
   - Validates embedded date against `cycle.effective_date` — catches wrong-cycle downloads with operator-readable error
   - Exports "Routes" → `Routes.csv` (SRD Parser input) and "Notes" → `Notes.csv`
 
-- **`src/archive/archiver.py`** — fully implemented, tested (45 tests)
-  - Collects all 7 required files: Routes.csv, Notes.csv, EG-ENR-3.2-en-GB.html, EG-ENR-3.3-en-GB.html, UK_YYYY_NN.sct, in.json, out.json
-  - Creates `{archive_repo}/vFPC YYNN/vFPC YYNN.zip` (flat layout, ZIP_DEFLATED)
-  - Writes `manifest.md` with cycle dates, UTC timestamp, and OS username
-  - Runs `git add` to stage both files for user review; never auto-commits
-
-- **`src/cli.py`** — fully implemented, tested (38 tests)
+- **`src/cli.py`** — fully implemented, tested (25 tests)
   - `fetch [--cycle YYNN]` — creates dir, copies in.json forward, fetches eAIP/SRD/SCT, converts Excel→CSV
-  - `archive [--cycle YYNN]` — zips files and stages in airac-data repo
   - All domain errors caught cleanly; non-zero exit on failure
-  - Run via `python -m src fetch` / `python -m src archive`
+  - Run via `python -m src fetch`
+  - Archive step handled by the separate **airac-archiver** tool: https://github.com/VFPC/airac-archiver
 
 ### What Needs Work
 
@@ -54,6 +48,12 @@
 - Populate `page_url` placeholders in `config.yaml` once confirmed
 - Merge `first-try` → `main` after live test passes
 - Optional: add `pyproject.toml` with `[project.scripts]` entry point
+
+### Archiver moved
+
+The archiver (`src/archive/archiver.py`) was extracted to its own repository
+in Session 10: **https://github.com/VFPC/airac-archiver**
+Run `airac-archiver` after the SRD Parser to package and stage cycle data.
 
 ---
 

@@ -12,7 +12,6 @@ from src.config import Config, ConfigError, load
 
 MINIMAL_YAML = """\
 workspace_base: /work
-archive_repo: /archive
 sources:
   nats_srd:
     page_url: ""
@@ -47,9 +46,6 @@ class TestLoad:
         cfg = load(cfg_file)
         assert isinstance(cfg.workspace_base, Path)
         assert cfg.workspace_base == Path("/work")
-
-    def test_archive_repo_is_path(self, cfg_file):
-        assert load(cfg_file).archive_repo == Path("/archive")
 
     def test_nats_srd_sheet_names(self, cfg_file):
         srd = load(cfg_file).sources.nats_srd
@@ -124,13 +120,6 @@ class TestLocalOverride:
         with pytest.raises(ConfigError, match="Failed to parse"):
             load(cfg_file)
 
-    def test_local_can_override_archive_repo(self, cfg_file):
-        cfg_file.with_name("config.local.yaml").write_text(
-            "archive_repo: /local/archive\n", encoding="utf-8"
-        )
-        assert load(cfg_file).archive_repo == Path("/local/archive")
-
-
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
@@ -138,31 +127,19 @@ class TestLocalOverride:
 class TestValidation:
     def test_missing_workspace_base_raises(self, tmp_path):
         f = tmp_path / "config.yaml"
-        f.write_text("archive_repo: /archive\n", encoding="utf-8")
+        f.write_text("sources:\n  nats_srd:\n    page_url: ''\n", encoding="utf-8")
         with pytest.raises(ConfigError, match="workspace_base"):
             load(f)
 
     def test_empty_workspace_base_raises(self, tmp_path):
         f = tmp_path / "config.yaml"
-        f.write_text("workspace_base: ''\narchive_repo: /archive\n", encoding="utf-8")
+        f.write_text("workspace_base: ''\n", encoding="utf-8")
         with pytest.raises(ConfigError, match="workspace_base"):
-            load(f)
-
-    def test_missing_archive_repo_raises(self, tmp_path):
-        f = tmp_path / "config.yaml"
-        f.write_text("workspace_base: /work\n", encoding="utf-8")
-        with pytest.raises(ConfigError, match="archive_repo"):
-            load(f)
-
-    def test_empty_archive_repo_raises(self, tmp_path):
-        f = tmp_path / "config.yaml"
-        f.write_text("workspace_base: /work\narchive_repo: ''\n", encoding="utf-8")
-        with pytest.raises(ConfigError, match="archive_repo"):
             load(f)
 
     def test_sources_section_is_optional(self, tmp_path):
         f = tmp_path / "config.yaml"
-        f.write_text("workspace_base: /work\narchive_repo: /archive\n", encoding="utf-8")
+        f.write_text("workspace_base: /work\n", encoding="utf-8")
         cfg = load(f)
         assert cfg.sources.nats_srd.page_url == ""
         assert cfg.sources.eaip.files == ()

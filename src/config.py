@@ -47,7 +47,6 @@ class SourcesConfig:
 @dataclass(frozen=True)
 class Config:
     workspace_base: Path
-    archive_repo: Path
     sources: SourcesConfig
 
 
@@ -80,7 +79,6 @@ def _require_str(raw: dict, *keys: str) -> str:
 
 def _parse(raw: dict) -> Config:
     workspace_base = Path(_require_str(raw, "workspace_base"))
-    archive_repo = Path(_require_str(raw, "archive_repo"))
 
     src = raw.get("sources") or {}
 
@@ -103,7 +101,6 @@ def _parse(raw: dict) -> Config:
 
     return Config(
         workspace_base=workspace_base,
-        archive_repo=archive_repo,
         sources=SourcesConfig(
             nats_srd=nats_srd,
             vatsim_sct=vatsim_sct,

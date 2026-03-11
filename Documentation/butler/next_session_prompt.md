@@ -1,6 +1,6 @@
 # AIRAC Data Fetcher — Next Session Prompt
 
-_Last updated: 2026-03-11 (Session 10 — Code review, refactoring, and documentation complete)_
+_Last updated: 2026-03-11 (Session 10 — Archiver extracted to airac-archiver repo)_
 
 ---
 
@@ -25,7 +25,7 @@ A companion repo, [VFPC/airac-data](https://github.com/VFPC/airac-data), provide
 
 - **Branch:** `first-try`
 - **Status:** Feature-complete, code-reviewed, and documented — waiting on live AIRAC data
-- **Tests:** 265 (all passing)
+- **Tests:** 204 (all passing)
 - **Dependencies:** requests, beautifulsoup4, openpyxl, pyyaml, click, pytest
 
 ---
@@ -70,23 +70,22 @@ A companion repo, [VFPC/airac-data](https://github.com/VFPC/airac-data), provide
 - `RULE:SRD-EXCEL-STRUCTURE` registered; config `sheet_name` default corrected from `"SRD"` → `"Routes"`
 - Validation fires before any file is written — wrong-cycle download fails loudly and cleanly
 
-### Session 8 (2026-03-11) — Archiver
-- `src/archive/archiver.py`: fully implemented; 45 tests
-- Design decisions confirmed before coding:
-  - **Zip contents:** Routes.csv, Notes.csv, EG-ENR-3.2-en-GB.html, EG-ENR-3.3-en-GB.html, UK_YYYY_NN.sct, in.json, out.json — all seven required (no raw .xlsx)
-  - **Repo layout:** `vFPC YYNN/` subdirectory containing `vFPC YYNN.zip` + `manifest.md`
-  - **Manifest:** date created (UTC) + OS username (`getpass.getuser()`) — simple by design
-  - **Git interaction:** writes files then runs `git add` to stage both for user review before committing
-- `out.json` is required (archiver only runs after a successful SRD Parser run)
-- `ArchiverError` raised on any missing file or git failure; git is never called if file collection fails
+### Session 8 (2026-03-11) — Archiver (now in airac-archiver)
+- Originally implemented here as `src/archive/archiver.py`; moved in Session 10
+- See https://github.com/VFPC/airac-archiver for the standalone archiver tool
 
 ### Session 9 (2026-03-11) — CLI
-- `src/cli.py`: Click group with two subcommands; 38 tests
+- `src/cli.py`: Click group with `fetch` subcommand; 25 tests
 - `src/__main__.py`: module entry point (run via `python -m src`)
 - `fetch --cycle YYNN` — runs all 6 steps in order; defaults to current cycle
-- `archive --cycle YYNN` — runs the archiver after the SRD Parser has written out.json
 - All domain errors caught and printed cleanly (no tracebacks); non-zero exit on any failure
 - eAIP `page_url` from config passed through if set, otherwise fetcher default used
+
+### Session 10 (2026-03-11) — Archiver extraction
+- `src/archive/archiver.py` and its tests removed from this repo
+- `archive_repo` removed from `src/config.py` and `config.yaml` (not needed by fetcher)
+- `archive` CLI subcommand removed; fetch output now references airac-archiver
+- New standalone repo: https://github.com/VFPC/airac-archiver (108 tests, all green)
 
 ---
 
@@ -107,5 +106,5 @@ Start with **issue #1** when the March data is available. Close #2 as part of th
 1. **config.yaml** stores all URLs and patterns — never hardcode download URLs in Python source.
 2. **config.local.yaml** is gitignored — use it for user-specific path overrides.
 3. **Main branch stays minimal** — all implementation work on `first-try` until ready to merge.
-4. **The archive step does not auto-commit** — it stages files in the airac-data repo for the user to review before committing.
+4. **Archiving is handled by airac-archiver** — a separate repo; does not auto-commit.
 5. **in.json is never modified** — only copied forward from the previous cycle if the new directory doesn't already exist.

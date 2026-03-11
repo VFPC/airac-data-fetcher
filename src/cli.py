@@ -4,8 +4,7 @@ Usage
 -----
 Run via the module entry point::
 
-    python -m src.cli fetch [--cycle YYNN]
-    python -m src.cli archive [--cycle YYNN]
+    python -m src fetch [--cycle YYNN]
 
 Commands
 --------
@@ -20,15 +19,8 @@ fetch
     5. Validate and convert the SRD Excel to Routes.csv and Notes.csv.
     6. Fetch the VATSIM UK sector file (.sct) from the uk-controller-pack release.
 
-archive
-    Zip the prepared cycle files and stage them in the airac-data repo.
-    Requires that the SRD Parser has been run (out.json must be present).
-
-    Steps run in order:
-
-    1. Collect all seven required files from the cycle working directory.
-    2. Create the zip and manifest in the archive repo subdirectory.
-    3. Run git add to stage both files for user review before committing.
+After fetching, run the SRD Parser to produce out.json, then use the
+airac-archiver tool to package and stage the files: https://github.com/VFPC/airac-archiver
 """
 
 from __future__ import annotations
@@ -41,7 +33,6 @@ from pathlib import Path
 import click
 
 from src.airac import AiracCycle, current_cycle, cycle_for_date
-from src.archive.archiver import ArchiverError, archive_cycle
 from src.config import ConfigError, load
 from src.processing.excel_to_csv import ExcelValidationError, convert_srd_excel
 from src.sources.eaip_html import EaipFetchError, fetch_eaip_html
@@ -198,50 +189,8 @@ def fetch(cycle: str | None) -> None:
         _abort(str(exc))
 
     click.echo(f"\nAll files ready in: {work_dir}")
-    click.echo("Run the SRD Parser, then use 'archive' when out.json is written.")
-
-
-# ---------------------------------------------------------------------------
-# archive command
-# ---------------------------------------------------------------------------
-
-@cli.command()
-@click.option(
-    "--cycle", "-c",
-    default=None,
-    metavar="YYNN",
-    help="AIRAC cycle ident to archive (e.g. 2603). Defaults to the current cycle.",
-)
-def archive(cycle: str | None) -> None:
-    """Zip the prepared cycle files and stage them in the airac-data repo."""
-    try:
-        cfg = load()
-    except ConfigError as exc:
-        _abort(str(exc))
-
-    try:
-        target = _resolve_cycle(cycle)
-    except click.BadParameter as exc:
-        _abort(str(exc))
-
-    work_dir = cycle_dir(cfg.workspace_base, target)
-
-    click.echo(f"\nCycle:       {target}")
-    click.echo(f"Working dir: {work_dir}")
-    click.echo(f"Archive repo: {cfg.archive_repo}\n")
-
-    click.echo("  Collecting files, creating zip, writing manifest, staging...", nl=False)
-    try:
-        zip_path, manifest_path = archive_cycle(target, work_dir, cfg.archive_repo)
-    except ArchiverError as exc:
-        click.echo("")  # end the partial line before printing the error
-        _abort(str(exc))
-
-    click.echo(" done")
-    click.echo(f"\nStaged for review:")
-    click.echo(f"  {zip_path}")
-    click.echo(f"  {manifest_path}")
-    click.echo("\nReview and commit when ready.")
+    click.echo("Run the SRD Parser, then use airac-archiver when out.json is written.")
+    click.echo("  https://github.com/VFPC/airac-archiver")
 
 
 # ---------------------------------------------------------------------------

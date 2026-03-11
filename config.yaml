@@ -1,18 +1,16 @@
 # AIRAC Data Fetcher configuration
 # ---
 # This file is committed to version control with safe default values.
-# Create config.local.yaml (gitignored) to override workspace_base and
-# archive_repo for your machine without touching this file.
+# Create config.local.yaml (gitignored) to override workspace_base
+# for your machine without touching this file.
+#
+# To archive prepared cycle data, use the airac-archiver tool:
+# https://github.com/VFPC/airac-archiver
 
 # Directory on your machine where per-cycle working directories are created.
 # Each cycle gets a sub-directory named "vFPC YYNN" (e.g. "vFPC 2603").
 # Override in config.local.yaml.
 workspace_base: ""
-
-# Path to your local clone of VFPC/airac-data.
-# The archiver writes the zip and manifest here, then runs git add.
-# Override in config.local.yaml.
-archive_repo: ""
 
 sources:
   nats_srd:
