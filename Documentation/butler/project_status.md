@@ -1,11 +1,11 @@
 # AIRAC Data Fetcher — Project Status
 
-## Current Project State (2026-03-10, Session 7)
+## Current Project State (2026-03-11, Session 9)
 
-### System Status: IN PROGRESS
+### System Status: FEATURE-COMPLETE
 
 **Branch:** `first-try`
-**Tests:** 180 (all passing)
+**Tests:** 263 (all passing)
 **Dependencies:** requests, beautifulsoup4, openpyxl, pyyaml, click, pytest
 
 ### What Exists
@@ -36,14 +36,26 @@
   - Validates embedded date against `cycle.effective_date` — catches wrong-cycle downloads with operator-readable error
   - Exports "Routes" → `Routes.csv` (SRD Parser input) and "Notes" → `Notes.csv`
 
+- **`src/archive/archiver.py`** — fully implemented, tested (45 tests)
+  - Collects all 7 required files: Routes.csv, Notes.csv, EG-ENR-3.2-en-GB.html, EG-ENR-3.3-en-GB.html, UK_YYYY_NN.sct, in.json, out.json
+  - Creates `{archive_repo}/vFPC YYNN/vFPC YYNN.zip` (flat layout, ZIP_DEFLATED)
+  - Writes `manifest.md` with cycle dates, UTC timestamp, and OS username
+  - Runs `git add` to stage both files for user review; never auto-commits
+
+- **`src/cli.py`** — fully implemented, tested (38 tests)
+  - `fetch [--cycle YYNN]` — creates dir, copies in.json forward, fetches eAIP/SRD/SCT, converts Excel→CSV
+  - `archive [--cycle YYNN]` — zips files and stages in airac-data repo
+  - All domain errors caught cleanly; non-zero exit on failure
+  - Run via `python -m src fetch` / `python -m src archive`
+
 ### What Needs Work
 
-Key implementation areas remaining:
-- `src/processing/excel_to_csv.py` — openpyxl sheet → CSV
-- `src/archive/archiver.py` — zip + manifest
-- `src/cli.py` — Click entry point
+- Live end-to-end test against real NATS/GitHub sources
+- Populate `page_url` placeholders in `config.yaml` once confirmed
+- Merge `first-try` → `main` after live test passes
+- Optional: add `pyproject.toml` with `[project.scripts]` entry point
 
 ---
 
-Last Updated: 2026-03-10
-Status: In progress — all fetchers and Excel→CSV complete; archiver and CLI remaining
+Last Updated: 2026-03-11
+Status: Feature-complete — all modules implemented and tested; live end-to-end test pending

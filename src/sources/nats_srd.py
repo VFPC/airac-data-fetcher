@@ -14,12 +14,12 @@ scraping is needed.
 
 from __future__ import annotations
 
-import urllib.request
+import urllib.error
 import zipfile
-from io import BytesIO
 from pathlib import Path
 
 from src.airac import AiracCycle
+from src.processing.zip_handler import download_zip
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -53,14 +53,6 @@ def _srd_zip_url(cycle: AiracCycle) -> str:
     # [RULE:SRD-DOWNLOAD-URL]
     """
     return f"{_SRD_BASE}AIRAC-{cycle.number:02d}-{cycle.year}.zip"
-
-
-def _download_zip(url: str, timeout: int = 120) -> BytesIO:
-    """Download the zip at *url* into memory and return a BytesIO buffer."""
-    req = urllib.request.Request(url, headers={"User-Agent": "airac-data-fetcher/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = resp.read()
-    return BytesIO(data)
 
 
 def _extract_excel(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
@@ -119,7 +111,7 @@ def fetch_srd(
 
     url = _srd_zip_url(cycle)
     try:
-        zip_buffer = _download_zip(url, timeout=timeout)
+        zip_buffer = download_zip(url, timeout=timeout)
     except urllib.error.HTTPError as exc:
         raise SrdFetchError(
             f"HTTP {exc.code} fetching SRD zip: {url}\n"

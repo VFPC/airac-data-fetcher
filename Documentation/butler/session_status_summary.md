@@ -125,8 +125,75 @@
 
 ---
 
+---
+
+### Session 2026-03-11 (Session 8): Archiver
+
+- **Implemented:** `src/archive/archiver.py`
+  - `_collect_files()` — validates all 7 required files are present; raises `ArchiverError` listing every missing file
+  - `_create_zip()` — flat ZIP_DEFLATED archive (no subdirectories)
+  - `_create_manifest()` — markdown manifest with cycle ident, effective/expiry dates, UTC timestamp, OS username (`getpass.getuser()`)
+  - `_git_stage()` — runs `git add` in the archive repo; raises `ArchiverError` on non-zero exit
+  - `archive_cycle()` — public entry point: collect → zip → manifest → stage
+- **Design decisions confirmed:**
+  - Zip contains exactly 7 files: Routes.csv, Notes.csv, EG-ENR-3.2-en-GB.html, EG-ENR-3.3-en-GB.html, UK_YYYY_NN.sct, in.json, out.json — no raw .xlsx
+  - Archive layout: `{archive_repo}/vFPC YYNN/vFPC YYNN.zip` + `manifest.md`
+  - `out.json` is required — archiver runs only after a successful SRD Parser run
+  - Manifest kept intentionally simple: dates + OS username
+  - `git add` stages files for review; no auto-commit
+- **Tests:** `tests/test_archiver.py` — 45 tests, all passing (first run clean)
+- **Total tests:** 225, all passing
+
+---
+
+---
+
+### Session 2026-03-11 (Session 9): CLI
+
+- **Implemented:** `src/cli.py` — Click group with two subcommands
+  - `fetch [--cycle YYNN]` — full 6-step pipeline:
+    1. Create cycle working directory
+    2. Copy in.json forward from previous cycle (skipped if already present)
+    3. Fetch eAIP HTML (ENR-3.2, ENR-3.3) — passes `index_url` from config if set
+    4. Fetch SRD Excel zip
+    5. Convert SRD Excel → Routes.csv + Notes.csv
+    6. Fetch VATSIM SCT file
+  - `archive [--cycle YYNN]` — calls `archive_cycle()` then shows staged paths
+  - Both default to `current_cycle()` if `--cycle` omitted
+  - All domain errors caught; clean message printed to stderr; `sys.exit(1)` on failure
+- **Implemented:** `src/__main__.py` — module entry point (`python -m src`)
+- **Key design decisions:**
+  - eAIP `page_url` from config forwarded only when non-empty (preserves fetcher default)
+  - `_resolve_cycle()` validates YYNN format and number range (1–13) before doing any date math
+  - `-c` accepted as shorthand for `--cycle`
+- **Tests:** `tests/test_cli.py` — 38 tests, all passing (first run clean after fixing `mkdir exist_ok`)
+- **Total tests:** 263, all passing
+
+---
+
+---
+
+### Session 2026-03-11 (Session 10): Code review, refactoring, and documentation
+
+- **Code review findings and fixes:**
+  - `config.yaml` `sheet_name: "SRD"` → corrected to `"Routes"` (session 7 had fixed the Python default but missed the yaml)
+  - `config.yaml` personal paths removed — replaced with empty placeholders and explanatory comments
+  - `eaip_html.py` inline `from urllib.parse import urljoin` moved to top-level imports
+  - `eaip_html.py` unused `from typing import Optional` removed
+  - `_download_zip()` was identically duplicated in all three fetchers — consolidated into `src/processing/zip_handler.py` (which had been scaffolded but left empty). Tests updated to patch the new import site.
+  - `VatsimSctConfig.url` kept in place — it is tested and documented as "reserved for future override"
+- **New test:** `tests/test_rules_db.py` — implements the vFPC Rules Database validation contract (tags in source must be registered; registered tags must exist in source). Skips gracefully if `vFPC-Rules-Database` is not a sibling repo.
+- **Documentation:**
+  - `airac-data-fetcher/README.md` — full user guide rewritten: prerequisites, config, usage, workflow, source URL logic, error messages, project structure, dev guide
+  - `airac-data/README.md` — rewritten to match actual implementation (old README had wrong archive structure, wrong zip contents, wrong manifest format)
+- **Rules database:** all 6 registered tags verified correct and fully traced
+- **Tests:** 265, all passing (+2 from rules validation test)
+
+---
+
 ## Overall Project Health
 
-- **Tests:** 180 (all passing)
+- **Tests:** 265 (all passing)
 - **Build warnings:** None
-- **Coverage:** `src/airac.py`, `src/config.py`, `src/workspace/directory_manager.py`, `src/sources/eaip_html.py`, `src/sources/nats_srd.py`, `src/sources/vatsim_sct.py`, `src/processing/excel_to_csv.py` fully tested
+- **Coverage:** All modules fully tested — `src/airac.py`, `src/config.py`, `src/workspace/directory_manager.py`, `src/sources/eaip_html.py`, `src/sources/nats_srd.py`, `src/sources/vatsim_sct.py`, `src/processing/excel_to_csv.py`, `src/processing/zip_handler.py`, `src/archive/archiver.py`, `src/cli.py`
+- **Blocked on:** Live AIRAC data for March cycle (GitHub issues #1, #2, #3)

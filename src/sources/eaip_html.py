@@ -24,13 +24,13 @@ from __future__ import annotations
 import urllib.request
 import zipfile
 from datetime import date
-from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
 from src.airac import AiracCycle
+from src.processing.zip_handler import download_zip
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -109,8 +109,6 @@ def _find_download_url(page_html: str, cycle: AiracCycle, page_base_url: str) ->
                 href = link["href"].strip()
                 if href.startswith("http"):
                     return href
-                # Resolve relative URL
-                from urllib.parse import urljoin
                 return urljoin(page_base_url, href)
 
     raise EaipFetchError(
@@ -119,13 +117,6 @@ def _find_download_url(page_html: str, cycle: AiracCycle, page_base_url: str) ->
         f"[RULE:EAIP-PAGE-STRUCTURE]."
     )
 
-
-def _download_zip(url: str, timeout: int = 120) -> BytesIO:
-    """Download the zip at *url* into memory and return a BytesIO buffer."""
-    req = urllib.request.Request(url, headers={"User-Agent": "airac-data-fetcher/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = resp.read()
-    return BytesIO(data)
 
 
 def _extract_targets(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
@@ -224,7 +215,7 @@ def fetch_eaip_html(
     zip_url = _find_download_url(page_html, cycle, page_base_url=index_url)
 
     # 3. Download the zip
-    zip_buffer = _download_zip(zip_url, timeout=timeout_zip)
+    zip_buffer = download_zip(zip_url, timeout=timeout_zip)
 
     # 4. Extract target files
     extracted = _extract_targets(zip_buffer, dest_dir)

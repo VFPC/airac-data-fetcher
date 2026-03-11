@@ -1,6 +1,6 @@
 # AIRAC Data Fetcher — Next Session Prompt
 
-_Last updated: 2026-03-10 (Session 7 — Excel→CSV converter; archiver questions pending)_
+_Last updated: 2026-03-11 (Session 10 — Code review, refactoring, and documentation complete)_
 
 ---
 
@@ -24,8 +24,8 @@ A companion repo, [VFPC/airac-data](https://github.com/VFPC/airac-data), provide
 ## Current State
 
 - **Branch:** `first-try`
-- **Status:** In progress — all fetchers + Excel→CSV complete; archiver and CLI next
-- **Tests:** 180 (all passing)
+- **Status:** Feature-complete, code-reviewed, and documented — waiting on live AIRAC data
+- **Tests:** 265 (all passing)
 - **Dependencies:** requests, beautifulsoup4, openpyxl, pyyaml, click, pytest
 
 ---
@@ -70,32 +70,35 @@ A companion repo, [VFPC/airac-data](https://github.com/VFPC/airac-data), provide
 - `RULE:SRD-EXCEL-STRUCTURE` registered; config `sheet_name` default corrected from `"SRD"` → `"Routes"`
 - Validation fires before any file is written — wrong-cycle download fails loudly and cleanly
 
+### Session 8 (2026-03-11) — Archiver
+- `src/archive/archiver.py`: fully implemented; 45 tests
+- Design decisions confirmed before coding:
+  - **Zip contents:** Routes.csv, Notes.csv, EG-ENR-3.2-en-GB.html, EG-ENR-3.3-en-GB.html, UK_YYYY_NN.sct, in.json, out.json — all seven required (no raw .xlsx)
+  - **Repo layout:** `vFPC YYNN/` subdirectory containing `vFPC YYNN.zip` + `manifest.md`
+  - **Manifest:** date created (UTC) + OS username (`getpass.getuser()`) — simple by design
+  - **Git interaction:** writes files then runs `git add` to stage both for user review before committing
+- `out.json` is required (archiver only runs after a successful SRD Parser run)
+- `ArchiverError` raised on any missing file or git failure; git is never called if file collection fails
+
+### Session 9 (2026-03-11) — CLI
+- `src/cli.py`: Click group with two subcommands; 38 tests
+- `src/__main__.py`: module entry point (run via `python -m src`)
+- `fetch --cycle YYNN` — runs all 6 steps in order; defaults to current cycle
+- `archive --cycle YYNN` — runs the archiver after the SRD Parser has written out.json
+- All domain errors caught and printed cleanly (no tracebacks); non-zero exit on any failure
+- eAIP `page_url` from config passed through if set, otherwise fetcher default used
+
 ---
 
 ## Next Steps
 
-1. **Design and implement `src/archive/archiver.py`** — the following questions were raised at end of session and must be answered before coding begins:
+All remaining work is blocked on live AIRAC data being available for the March cycle. GitHub issues have been created:
 
-   **What files go in the zip?**
-   - Working directory `vFPC YYNN/` will contain: `Routes.csv`, `Notes.csv`, `EG-ENR-3.2-en-GB.html`, `EG-ENR-3.3-en-GB.html`, `UK_YYYY_NN.sct`, `in.json`, and the raw SRD `.xlsx`.
-   - Does everything go in, or only a subset? Does the raw Excel go in or just the CSVs?
+1. **Issue #1** — Live end-to-end test: run `python -m src fetch --cycle 2603` against real NATS and GitHub sources
+2. **Issue #2** — Populate `config.yaml` source URLs once confirmed from the live test
+3. **Issue #3** — Merge `first-try` → `main` (requires #1 and #2 closed first; README update needed before merge)
 
-   **Structure in airac-data repo?**
-   - Option A: flat — `vFPC 2602.zip` + `vFPC 2602_manifest.md` in the repo root
-   - Option B: subdirectory — `vFPC 2602/` containing the zip and manifest inside it
-   - Which layout matches what you expect?
-
-   **What goes in the manifest?**
-   - Proposed: cycle ident, effective/expiry dates, list of files with sizes and checksums (SHA-256), timestamp of archive creation, source URL/tag each file came from.
-   - Is that right, or simpler?
-
-   **Git interaction?**
-   - Rule is "does not auto-commit — user reviews first."
-   - Option A: archiver writes zip + manifest, stops there — no git at all.
-   - Option B: archiver writes files then runs `git add` so files are staged and ready for your review/commit.
-   - Which do you prefer?
-
-2. **Implement `src/cli.py`** — Click entry point tying all fetchers, converter, and archiver together for a given cycle.
+Start with **issue #1** when the March data is available. Close #2 as part of that run, then #3.
 
 ---
 

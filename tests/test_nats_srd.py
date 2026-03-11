@@ -63,11 +63,11 @@ def _make_zip(files: dict[str, bytes]) -> io.BytesIO:
 
 
 def _patch_download(zip_buf: io.BytesIO):
-    """Patch _download_zip to return *zip_buf* (seeked to 0 each call)."""
+    """Patch download_zip to return *zip_buf* (seeked to 0 each call)."""
     def fake_download(url, timeout=120):
         zip_buf.seek(0)
         return zip_buf
-    return patch("src.sources.nats_srd._download_zip", side_effect=fake_download)
+    return patch("src.sources.nats_srd.download_zip", side_effect=fake_download)
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ class TestFetchSrd:
             assert path.parent == tmp_path
 
     def test_correct_url_constructed(self, tmp_path):
-        """Verify the URL passed to _download_zip matches [RULE:SRD-DOWNLOAD-URL]."""
+        """Verify the URL passed to download_zip matches [RULE:SRD-DOWNLOAD-URL]."""
         buf = _make_zip({SRD_XLSX_NAME: b"data"})
         captured_urls = []
 
@@ -202,7 +202,7 @@ class TestFetchSrd:
             buf.seek(0)
             return buf
 
-        with patch("src.sources.nats_srd._download_zip", side_effect=fake_download):
+        with patch("src.sources.nats_srd.download_zip", side_effect=fake_download):
             fetch_srd(CYCLE_2602, tmp_path)
 
         assert len(captured_urls) == 1
@@ -213,13 +213,13 @@ class TestFetchSrd:
         http_error = urllib.error.HTTPError(
             url="https://example.com", code=404, msg="Not Found", hdrs=None, fp=None
         )
-        with patch("src.sources.nats_srd._download_zip", side_effect=http_error):
+        with patch("src.sources.nats_srd.download_zip", side_effect=http_error):
             with pytest.raises(SrdFetchError, match="HTTP 404"):
                 fetch_srd(CYCLE_2602, tmp_path)
 
     def test_network_error_raises_srd_fetch_error(self, tmp_path):
         url_error = urllib.error.URLError("connection refused")
-        with patch("src.sources.nats_srd._download_zip", side_effect=url_error):
+        with patch("src.sources.nats_srd.download_zip", side_effect=url_error):
             with pytest.raises(SrdFetchError, match="Network error"):
                 fetch_srd(CYCLE_2602, tmp_path)
 

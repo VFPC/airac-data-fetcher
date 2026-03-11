@@ -1,18 +1,35 @@
 # AIRAC Data Fetcher configuration
-# Copy to config.local.yaml for user-specific overrides (gitignored).
+# ---
+# This file is committed to version control with safe default values.
+# Create config.local.yaml (gitignored) to override workspace_base and
+# archive_repo for your machine without touching this file.
 
-workspace_base: "C:\\Users\\jkino\\Desktop\\SRD Testing Files"
-archive_repo: "C:\\Users\\jkino\\Documents\\GitHub\\airac-data"
+# Directory on your machine where per-cycle working directories are created.
+# Each cycle gets a sub-directory named "vFPC YYNN" (e.g. "vFPC 2603").
+# Override in config.local.yaml.
+workspace_base: ""
+
+# Path to your local clone of VFPC/airac-data.
+# The archiver writes the zip and manifest here, then runs git add.
+# Override in config.local.yaml.
+archive_repo: ""
 
 sources:
   nats_srd:
-    page_url: ""          # NATS SRD download page URL — TBD
-    sheet_name: "SRD"     # Main sheet to export as CSV
-    notes_sheet: "Notes"  # Notes sheet to export as CSV (optional)
+    # Override only if the NATS EAD page URL changes.
+    # Leave blank to use the hardcoded default in nats_srd.py.
+    page_url: ""
+    # [RULE:SRD-EXCEL-STRUCTURE] Sheet names are NATS publishing conventions.
+    sheet_name: "Routes"
+    notes_sheet: "Notes"
   vatsim_sct:
-    url: ""               # VATSIM UK SCT download URL — TBD
+    # Not currently used — the SCT fetcher queries the GitHub releases API
+    # directly via a hardcoded URL. Reserved for future override.
+    url: ""
   eaip:
-    page_url: ""          # UK eAIP download page URL — TBD
+    # Override only if the NATS AIP page URL changes.
+    # Leave blank to use the hardcoded default in eaip_html.py.
+    page_url: ""
     files:
       - "EG-ENR-3.2-en-GB.html"
       - "EG-ENR-3.3-en-GB.html"

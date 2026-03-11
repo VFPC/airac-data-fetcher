@@ -30,10 +30,10 @@ import re
 import urllib.error
 import urllib.request
 import zipfile
-from io import BytesIO
 from pathlib import Path
 
 from src.airac import AiracCycle
+from src.processing.zip_handler import download_zip
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -133,15 +133,6 @@ def _source_zip_url(tag: str) -> str:
     return _SOURCE_ZIP_URL.format(repo=_GITHUB_REPO, tag=tag)
 
 
-def _download_zip(url: str, timeout: int = 120) -> BytesIO:
-    """Download the zip at *url* into memory and return a BytesIO buffer."""
-    req = urllib.request.Request(
-        url, headers={"User-Agent": "airac-data-fetcher/1.0"}
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = resp.read()
-    return BytesIO(data)
-
 
 def _extract_sct(zip_buffer: BytesIO, cycle: AiracCycle, dest_dir: Path) -> Path:
     """Extract the SCT file for *cycle* from *zip_buffer* into *dest_dir*.
@@ -219,7 +210,7 @@ def fetch_sct(
     # 2. Download the source zip for that tag
     zip_url = _source_zip_url(tag)
     try:
-        zip_buffer = _download_zip(zip_url, timeout=timeout_zip)
+        zip_buffer = download_zip(zip_url, timeout=timeout_zip)
     except urllib.error.HTTPError as exc:
         raise SctFetchError(
             f"HTTP {exc.code} downloading source zip for tag '{tag}': {zip_url}"

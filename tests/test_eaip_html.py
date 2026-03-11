@@ -257,20 +257,20 @@ class TestFetchEaipHtml:
         })
 
     def _patch_fetch(self, page_html: str, zip_buf: io.BytesIO):
-        """Return a context manager that patches _fetch_html and _download_zip."""
+        """Return a context manager that patches _fetch_html and download_zip."""
         import unittest.mock as mock
 
         def fake_fetch_html(url, timeout=30):
             return page_html
 
-        def fake_download_zip(url, timeout=120):
+        def fakedownload_zip(url, timeout=120):
             zip_buf.seek(0)
             return zip_buf
 
         return mock.patch.multiple(
             "src.sources.eaip_html",
             _fetch_html=fake_fetch_html,
-            _download_zip=fake_download_zip,
+            download_zip=fakedownload_zip,
         )
 
     def test_returns_both_files(self, tmp_path):

@@ -71,7 +71,7 @@ def _make_zip_with_sct(
 
 
 def _patch_api_and_zip(releases: list[dict], zip_buf: io.BytesIO):
-    """Patch both _fetch_releases and _download_zip."""
+    """Patch both _fetch_releases and download_zip."""
     def fake_fetch(url, timeout=30):
         return releases
 
@@ -82,7 +82,7 @@ def _patch_api_and_zip(releases: list[dict], zip_buf: io.BytesIO):
     return patch.multiple(
         "src.sources.vatsim_sct",
         _fetch_releases=fake_fetch,
-        _download_zip=fake_download,
+        download_zip=fake_download,
     )
 
 
@@ -307,7 +307,7 @@ class TestFetchSct:
         with patch.multiple(
             "src.sources.vatsim_sct",
             _fetch_releases=fake_fetch,
-            _download_zip=fake_download,
+            download_zip=fake_download,
         ):
             fetch_sct(CYCLE_2602, tmp_path)
 
@@ -339,7 +339,7 @@ class TestFetchSct:
             return self._releases()
 
         with patch("src.sources.vatsim_sct._fetch_releases", side_effect=fake_fetch):
-            with patch("src.sources.vatsim_sct._download_zip", side_effect=http_err):
+            with patch("src.sources.vatsim_sct.download_zip", side_effect=http_err):
                 with pytest.raises(SctFetchError, match="HTTP 404"):
                     fetch_sct(CYCLE_2602, tmp_path)
 
@@ -359,7 +359,7 @@ class TestFetchSct:
         with patch.multiple(
             "src.sources.vatsim_sct",
             _fetch_releases=fake_fetch,
-            _download_zip=fake_download,
+            download_zip=fake_download,
         ):
             fetch_sct(CYCLE_2602, tmp_path, releases_api_url=custom_url)
 
