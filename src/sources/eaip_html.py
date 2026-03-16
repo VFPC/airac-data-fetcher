@@ -37,7 +37,7 @@ from src.processing.zip_handler import download_zip
 # ---------------------------------------------------------------------------
 
 # [RULE:EAIP-PAGE-STRUCTURE]
-_AIP_INDEX_URL = "https://nats-uk.ead-it.com/cms-nats/opencms/en/Publication/AIP/"
+_AIP_INDEX_URL = "https://nats-uk.ead-it.com/cms-nats/opencms/en/Publications/AIP/"
 _HEADING_PREFIX = "AIRAC "          # h3 heading starts with this
 _LINK_TEXT = "Offline HTML Download"  # exact anchor text to match
 
