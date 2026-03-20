@@ -146,6 +146,16 @@ class TestFindWhatsNewDate:
         ws = self._ws_with_cell(f"  {VALID_HEADER}  extra text")
         assert _find_whats_new_date(ws) == date(2026, 2, 19)
 
+    def test_unicode_right_single_quotation_mark(self):
+        # NATS uses U+2019 (RIGHT SINGLE QUOTATION MARK) in some cycles
+        ws = self._ws_with_cell("What\u2019s New - 19th February 2026 AIRAC")
+        assert _find_whats_new_date(ws) == date(2026, 2, 19)
+
+    def test_header_with_version_suffix(self):
+        # NATS appends "(v2)" or similar in revised workbooks
+        ws = self._ws_with_cell("What\u2019s New - 19th March 2026 AIRAC (v2)")
+        assert _find_whats_new_date(ws) == date(2026, 3, 19)
+
 
 # ---------------------------------------------------------------------------
 # validate_whats_new

@@ -75,7 +75,8 @@ def _find_whats_new_date(ws) -> date | None:
         for cell_value in row:
             if cell_value is None:
                 continue
-            m = _HEADER_RE.search(str(cell_value))
+            normalised = str(cell_value).replace("\u2019", "'").replace("\u2018", "'")
+            m = _HEADER_RE.search(normalised)
             if m:
                 day, month_name, year = m.group(1), m.group(2), m.group(3)
                 try:
