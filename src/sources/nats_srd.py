@@ -14,6 +14,8 @@ scraping is needed.
 
 from __future__ import annotations
 
+import shutil
+import tempfile
 import urllib.error
 import zipfile
 from pathlib import Path
@@ -59,27 +61,40 @@ def _extract_excel(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
     """Extract all Excel files from *zip_buffer* into *dest_dir*.
 
     Files are identified by extension (.xlsx / .xls) regardless of their
-    path within the archive.
+    path within the archive.  Extraction is atomic: files are written to a
+    temp directory first, then moved to *dest_dir* only after at least one
+    Excel file is confirmed present.
 
     Returns a dict mapping basename -> extracted Path.
     Raises SrdFetchError if no Excel file is found in the archive.
     """
-    extracted: dict[str, Path] = {}
+    staged: dict[str, Path] = {}
 
-    with zipfile.ZipFile(zip_buffer) as zf:
-        for entry in zf.infolist():
-            suffix = Path(entry.filename).suffix.lower()
-            if suffix in _EXCEL_EXTENSIONS:
-                basename = Path(entry.filename).name
-                dest_path = dest_dir / basename
-                dest_path.write_bytes(zf.read(entry.filename))
-                extracted[basename] = dest_path
+    tmp_dir = Path(tempfile.mkdtemp(dir=dest_dir, prefix=".srd_tmp_"))
+    try:
+        with zipfile.ZipFile(zip_buffer) as zf:
+            for entry in zf.infolist():
+                suffix = Path(entry.filename).suffix.lower()
+                if suffix in _EXCEL_EXTENSIONS:
+                    basename = Path(entry.filename).name
+                    tmp_path = tmp_dir / basename
+                    tmp_path.write_bytes(zf.read(entry.filename))
+                    staged[basename] = tmp_path
 
-    if not extracted:
-        raise SrdFetchError(
-            "SRD zip contained no Excel files (.xlsx / .xls). "
-            "The archive format may have changed."
-        )
+        if not staged:
+            raise SrdFetchError(
+                "SRD zip contained no Excel files (.xlsx / .xls). "
+                "The archive format may have changed."
+            )
+
+        extracted: dict[str, Path] = {}
+        for basename, tmp_path in staged.items():
+            final_path = dest_dir / basename
+            shutil.move(str(tmp_path), str(final_path))
+            extracted[basename] = final_path
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
     return extracted
 
 

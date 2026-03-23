@@ -257,6 +257,32 @@ class TestExtractSct:
         with pytest.raises(SctFetchError, match=SCT_BASENAME_2602):
             _extract_sct(buf, CYCLE_2602, tmp_path)
 
+    def test_no_partial_files_on_missing_sct(self, tmp_path):
+        """When the SCT file is not found, dest_dir must stay empty."""
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("repo/README.md", "nothing")
+        buf.seek(0)
+        with pytest.raises(SctFetchError):
+            _extract_sct(buf, CYCLE_2602, tmp_path)
+        assert list(tmp_path.iterdir()) == []
+
+    def test_temp_dir_cleaned_up_on_success(self, tmp_path):
+        buf = _make_zip_with_sct(SCT_BASENAME_2602)
+        _extract_sct(buf, CYCLE_2602, tmp_path)
+        remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".sct_tmp_")]
+        assert remaining == []
+
+    def test_temp_dir_cleaned_up_on_failure(self, tmp_path):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("repo/README.md", "nothing")
+        buf.seek(0)
+        with pytest.raises(SctFetchError):
+            _extract_sct(buf, CYCLE_2602, tmp_path)
+        remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".sct_tmp_")]
+        assert remaining == []
+
 
 # ---------------------------------------------------------------------------
 # fetch_sct — integration (fully mocked)

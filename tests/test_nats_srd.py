@@ -164,6 +164,26 @@ class TestExtractExcel:
         result = _extract_excel(buf, tmp_path)
         assert "SRD.XLSX" in result
 
+    def test_no_partial_files_on_empty_zip(self, tmp_path):
+        """When no Excel files are found, dest_dir must stay empty."""
+        buf = _make_zip({"notes.txt": b"nothing"})
+        with pytest.raises(SrdFetchError):
+            _extract_excel(buf, tmp_path)
+        assert list(tmp_path.iterdir()) == []
+
+    def test_temp_dir_cleaned_up_on_success(self, tmp_path):
+        buf = _make_zip({SRD_XLSX_NAME: b"data"})
+        _extract_excel(buf, tmp_path)
+        remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".srd_tmp_")]
+        assert remaining == []
+
+    def test_temp_dir_cleaned_up_on_failure(self, tmp_path):
+        buf = _make_zip({})
+        with pytest.raises(SrdFetchError):
+            _extract_excel(buf, tmp_path)
+        remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".srd_tmp_")]
+        assert remaining == []
+
 
 # ---------------------------------------------------------------------------
 # fetch_srd — integration (mocked network)

@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import tempfile
 import urllib.error
 import urllib.request
 import zipfile
@@ -141,27 +143,36 @@ def _extract_sct(zip_buffer: BytesIO, cycle: AiracCycle, dest_dir: Path) -> Path
     The file is located by finding a zip entry whose path contains the
     ``UK/data/`` component and whose basename matches ``UK_{YYYY}_{NN}.sct``.
 
+    Extraction is atomic: the file is written to a temp directory first,
+    then moved to *dest_dir* only on success.
+
     Returns the destination path.
     Raises SctFetchError if the file is not found.
     """
     target_basename = _sct_basename(cycle)
-    dest_path = dest_dir / target_basename
+    final_path = dest_dir / target_basename
 
-    with zipfile.ZipFile(zip_buffer) as zf:
-        for entry in zf.infolist():
-            normalised = entry.filename.replace("\\", "/")
-            if (
-                _SCT_DATA_DIR in normalised
-                and Path(normalised).name == target_basename
-            ):
-                dest_path.write_bytes(zf.read(entry.filename))
-                return dest_path
+    tmp_dir = Path(tempfile.mkdtemp(dir=dest_dir, prefix=".sct_tmp_"))
+    try:
+        with zipfile.ZipFile(zip_buffer) as zf:
+            for entry in zf.infolist():
+                normalised = entry.filename.replace("\\", "/")
+                if (
+                    _SCT_DATA_DIR in normalised
+                    and Path(normalised).name == target_basename
+                ):
+                    tmp_path = tmp_dir / target_basename
+                    tmp_path.write_bytes(zf.read(entry.filename))
+                    shutil.move(str(tmp_path), str(final_path))
+                    return final_path
 
-    raise SctFetchError(
-        f"SCT file '{target_basename}' not found under '{_SCT_DATA_DIR}' "
-        "in the source zip. The repo structure may have changed. "
-        "[RULE:SCT-FILE-PATH]"
-    )
+        raise SctFetchError(
+            f"SCT file '{target_basename}' not found under '{_SCT_DATA_DIR}' "
+            "in the source zip. The repo structure may have changed. "
+            "[RULE:SCT-FILE-PATH]"
+        )
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------

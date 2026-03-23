@@ -21,6 +21,8 @@ read and compared against the cycle's effective_date to catch mismatches.
 
 from __future__ import annotations
 
+import shutil
+import tempfile
 import urllib.request
 import zipfile
 from datetime import date
@@ -123,26 +125,41 @@ def _extract_targets(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
     """Extract the two target HTML files from *zip_buffer* into *dest_dir*.
 
     Files are located by basename regardless of their path within the archive.
+    Extraction is atomic: files are written to a temp directory first, then
+    moved to *dest_dir* only after all targets are confirmed present.  If
+    interrupted mid-extraction the destination is left unchanged.
+
     Returns a dict mapping basename -> extracted Path.
     Raises EaipFetchError if either target is missing from the archive.
     """
     remaining = set(_TARGET_BASENAMES)
-    extracted: dict[str, Path] = {}
+    staged: dict[str, Path] = {}
 
-    with zipfile.ZipFile(zip_buffer) as zf:
-        for entry in zf.infolist():
-            name = Path(entry.filename).name
-            if name in remaining:
-                dest_path = dest_dir / name
-                dest_path.write_bytes(zf.read(entry.filename))
-                extracted[name] = dest_path
-                remaining.discard(name)
+    tmp_dir = Path(tempfile.mkdtemp(dir=dest_dir, prefix=".eaip_tmp_"))
+    try:
+        with zipfile.ZipFile(zip_buffer) as zf:
+            for entry in zf.infolist():
+                name = Path(entry.filename).name
+                if name in remaining:
+                    tmp_path = tmp_dir / name
+                    tmp_path.write_bytes(zf.read(entry.filename))
+                    staged[name] = tmp_path
+                    remaining.discard(name)
 
-    if remaining:
-        raise EaipFetchError(
-            f"Zip archive is missing expected files: {sorted(remaining)}. "
-            "The eAIP archive format may have changed."
-        )
+        if remaining:
+            raise EaipFetchError(
+                f"Zip archive is missing expected files: {sorted(remaining)}. "
+                "The eAIP archive format may have changed."
+            )
+
+        extracted: dict[str, Path] = {}
+        for name, tmp_path in staged.items():
+            final_path = dest_dir / name
+            shutil.move(str(tmp_path), str(final_path))
+            extracted[name] = final_path
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
     return extracted
 
 

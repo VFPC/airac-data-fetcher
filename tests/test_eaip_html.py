@@ -208,6 +208,26 @@ class TestExtractTargets:
         assert set(result.keys()) == {ENR32_NAME, ENR33_NAME}
         assert not (tmp_path / "EG-ENR-2.1-en-GB.html").exists()
 
+    def test_no_partial_files_on_missing_target(self, tmp_path):
+        """When one target is missing, the other must NOT be left in dest_dir."""
+        buf = _make_zip({ENR32_NAME: b"only one"})
+        with pytest.raises(EaipFetchError):
+            _extract_targets(buf, tmp_path)
+        assert not (tmp_path / ENR32_NAME).exists()
+
+    def test_temp_dir_cleaned_up_on_success(self, tmp_path):
+        buf = _make_zip({ENR32_NAME: b"32", ENR33_NAME: b"33"})
+        _extract_targets(buf, tmp_path)
+        remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".eaip_tmp_")]
+        assert remaining == []
+
+    def test_temp_dir_cleaned_up_on_failure(self, tmp_path):
+        buf = _make_zip({"unrelated.html": b"nothing"})
+        with pytest.raises(EaipFetchError):
+            _extract_targets(buf, tmp_path)
+        remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".eaip_tmp_")]
+        assert remaining == []
+
 
 # ---------------------------------------------------------------------------
 # _validate_effective_date
