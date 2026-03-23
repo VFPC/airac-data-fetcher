@@ -11,7 +11,7 @@ import io
 import zipfile
 from datetime import date
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import pytest
 from bs4 import BeautifulSoup
@@ -227,6 +227,27 @@ class TestExtractTargets:
             _extract_targets(buf, tmp_path)
         remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".eaip_tmp_")]
         assert remaining == []
+
+    def test_rollback_committed_files_on_move_failure(self, tmp_path):
+        """If the second move fails, the first committed file must be removed."""
+        import shutil as _shutil
+        buf = _make_zip({ENR32_NAME: b"32", ENR33_NAME: b"33"})
+        call_count = 0
+
+        def fail_on_second(src, dst):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise OSError("simulated move failure")
+            _shutil.move(src, dst)
+
+        with patch("src.sources.eaip_html.shutil.move", side_effect=fail_on_second):
+            with pytest.raises(OSError, match="simulated move failure"):
+                _extract_targets(buf, tmp_path)
+
+        # Neither target file must remain in dest_dir
+        assert not (tmp_path / ENR32_NAME).exists()
+        assert not (tmp_path / ENR33_NAME).exists()
 
 
 # ---------------------------------------------------------------------------

@@ -26,6 +26,7 @@ the exact basename ``UK_{YYYY}_{NN}.sct``.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import tempfile
@@ -36,6 +37,8 @@ from pathlib import Path
 
 from src.airac import AiracCycle
 from src.processing.zip_handler import download_zip
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -206,30 +209,41 @@ def fetch_sct(
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Fetch releases and find the latest tag for this cycle
+    logger.info("Fetching GitHub releases: %s", releases_api_url)
     try:
         releases = _fetch_releases(releases_api_url, timeout=timeout_api)
     except urllib.error.HTTPError as exc:
+        logger.error("HTTP %d fetching releases from %s", exc.code, releases_api_url)
         raise SctFetchError(
             f"HTTP {exc.code} fetching releases from {releases_api_url}"
         ) from exc
     except urllib.error.URLError as exc:
+        logger.error("Network error fetching releases: %s", exc.reason)
         raise SctFetchError(
             f"Network error fetching releases: {exc.reason}"
         ) from exc
+    logger.info("Received %d releases", len(releases))
     tag = _latest_tag_for_cycle(releases, cycle)
+    logger.info("Selected tag: %s", tag)
 
     # 2. Download the source zip for that tag
     zip_url = _source_zip_url(tag)
+    logger.info("Downloading source zip: %s", zip_url)
     try:
         zip_buffer = download_zip(zip_url, timeout=timeout_zip)
     except urllib.error.HTTPError as exc:
+        logger.error("HTTP %d downloading source zip for tag '%s': %s", exc.code, tag, zip_url)
         raise SctFetchError(
             f"HTTP {exc.code} downloading source zip for tag '{tag}': {zip_url}"
         ) from exc
     except urllib.error.URLError as exc:
+        logger.error("Network error downloading source zip: %s", exc.reason)
         raise SctFetchError(
             f"Network error downloading source zip: {exc.reason}"
         ) from exc
+    logger.info("Source zip downloaded (%d bytes)", zip_buffer.getbuffer().nbytes)
 
     # 3. Extract the SCT file
-    return _extract_sct(zip_buffer, cycle, dest_dir)
+    sct_path = _extract_sct(zip_buffer, cycle, dest_dir)
+    logger.info("Extracted %s (%d bytes)", sct_path.name, sct_path.stat().st_size)
+    return sct_path

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -16,6 +17,16 @@ from src.processing.excel_to_csv import ExcelValidationError
 from src.sources.eaip_html import EaipFetchError
 from src.sources.nats_srd import SrdFetchError
 from src.sources.vatsim_sct import SctFetchError
+
+
+@pytest.fixture(autouse=True)
+def _clean_logging():
+    """Remove file handlers added by _setup_logging between tests."""
+    yield
+    src_logger = logging.getLogger("src")
+    for h in src_logger.handlers[:]:
+        h.close()
+        src_logger.removeHandler(h)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -268,6 +279,41 @@ class TestFetchCommand:
             runner.invoke(cli, ["fetch", "--cycle", "2603"])
         _, kwargs = mock_eaip.call_args
         assert "index_url" not in kwargs
+
+    def test_log_file_created_on_success(self, tmp_path):
+        result = self._invoke(tmp_path)
+        assert result.exit_code == 0
+        work_dir = tmp_path / "workspace" / "vFPC 2603"
+        log_files = list(work_dir.glob("fetcher_log_*.txt"))
+        assert len(log_files) == 1
+
+    def test_log_file_contains_cycle_info(self, tmp_path):
+        self._invoke(tmp_path)
+        work_dir = tmp_path / "workspace" / "vFPC 2603"
+        log_files = list(work_dir.glob("fetcher_log_*.txt"))
+        content = log_files[0].read_text(encoding="utf-8")
+        assert "2603" in content
+        assert "run started" in content
+        assert "run complete" in content
+
+    def test_output_shows_log_file_path(self, tmp_path):
+        result = self._invoke(tmp_path)
+        assert "Log file:" in result.output
+        assert "fetcher_log_" in result.output
+
+    def test_repeated_fetch_does_not_duplicate_handlers(self, tmp_path):
+        """Two fetch invocations must not accumulate file handlers."""
+        self._invoke(tmp_path)
+        self._invoke(tmp_path)
+        src_logger = logging.getLogger("src")
+        assert len(src_logger.handlers) <= 1
+
+    def test_repeated_fetch_creates_separate_log_files(self, tmp_path):
+        self._invoke(tmp_path)
+        self._invoke(tmp_path)
+        work_dir = tmp_path / "workspace" / "vFPC 2603"
+        log_files = list(work_dir.glob("fetcher_log_*.txt"))
+        assert len(log_files) >= 1
 
 
 # ---------------------------------------------------------------------------

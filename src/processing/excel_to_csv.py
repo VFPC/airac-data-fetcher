@@ -25,6 +25,7 @@ Sheet name and header conventions
 from __future__ import annotations
 
 import csv
+import logging
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -32,6 +33,8 @@ from pathlib import Path
 import openpyxl
 
 from src.airac import AiracCycle
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants  [RULE:SRD-EXCEL-STRUCTURE]
@@ -157,10 +160,13 @@ def convert_srd_excel(
     Raises:
         ExcelValidationError: if the workbook fails structure or date checks.
     """
+    logger.info("Opening SRD workbook: %s", excel_path.name)
     wb = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
+    logger.info("Sheets found: %s", wb.sheetnames)
 
     # Step 1: validate the What's New sheet before touching any data
     validate_whats_new(wb, cycle)
+    logger.info("What's New date validated for cycle %s", cycle.ident)
 
     dest_dir.mkdir(parents=True, exist_ok=True)
     result: dict[str, Path] = {}
@@ -176,5 +182,6 @@ def convert_srd_excel(
         csv_path = dest_dir / f"{sheet_name}.csv"
         _sheet_to_csv(wb[sheet_name], csv_path)
         result[sheet_name] = csv_path
+        logger.info("Exported %s → %s (%d bytes)", sheet_name, csv_path.name, csv_path.stat().st_size)
 
     return result

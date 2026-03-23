@@ -14,6 +14,7 @@ scraping is needed.
 
 from __future__ import annotations
 
+import logging
 import shutil
 import tempfile
 import urllib.error
@@ -22,6 +23,8 @@ from pathlib import Path
 
 from src.airac import AiracCycle
 from src.processing.zip_handler import download_zip
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -61,9 +64,13 @@ def _extract_excel(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
     """Extract all Excel files from *zip_buffer* into *dest_dir*.
 
     Files are identified by extension (.xlsx / .xls) regardless of their
-    path within the archive.  Extraction is atomic: files are written to a
-    temp directory first, then moved to *dest_dir* only after at least one
-    Excel file is confirmed present.
+    path within the archive.
+
+    Safety guarantee: all Excel files are staged in a temp directory first.
+    Only after at least one is confirmed present are they moved into *dest_dir*
+    one by one.  If any move fails, all files already committed to *dest_dir*
+    are removed and the temp directory is cleaned up, so *dest_dir* is left in
+    its original state.
 
     Returns a dict mapping basename -> extracted Path.
     Raises SrdFetchError if no Excel file is found in the archive.
@@ -88,10 +95,15 @@ def _extract_excel(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
             )
 
         extracted: dict[str, Path] = {}
-        for basename, tmp_path in staged.items():
-            final_path = dest_dir / basename
-            shutil.move(str(tmp_path), str(final_path))
-            extracted[basename] = final_path
+        try:
+            for basename, tmp_path in staged.items():
+                final_path = dest_dir / basename
+                shutil.move(str(tmp_path), str(final_path))
+                extracted[basename] = final_path
+        except Exception:
+            for committed_path in extracted.values():
+                committed_path.unlink(missing_ok=True)
+            raise
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -125,15 +137,22 @@ def fetch_srd(
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     url = _srd_zip_url(cycle)
+    logger.info("Fetching SRD zip: %s", url)
     try:
         zip_buffer = download_zip(url, timeout=timeout)
     except urllib.error.HTTPError as exc:
+        logger.error("HTTP %d fetching SRD zip: %s", exc.code, url)
         raise SrdFetchError(
             f"HTTP {exc.code} fetching SRD zip: {url}\n"
             "The URL pattern may have changed — check the NATS Digital Datasets page "
             "and update _SRD_BASE / _srd_zip_url() if needed. [RULE:SRD-DOWNLOAD-URL]"
         ) from exc
     except urllib.error.URLError as exc:
+        logger.error("Network error fetching SRD zip: %s", exc.reason)
         raise SrdFetchError(f"Network error fetching SRD zip: {exc.reason}") from exc
 
-    return _extract_excel(zip_buffer, dest_dir)
+    logger.info("SRD zip downloaded (%d bytes)", zip_buffer.getbuffer().nbytes)
+    extracted = _extract_excel(zip_buffer, dest_dir)
+    for name, path in extracted.items():
+        logger.info("Extracted %s (%d bytes)", name, path.stat().st_size)
+    return extracted

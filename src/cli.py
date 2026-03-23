@@ -25,9 +25,10 @@ airac-archiver tool to package and stage the files: https://github.com/VFPC/aira
 
 from __future__ import annotations
 
+import logging
 import re
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import click
@@ -100,6 +101,38 @@ def _abort(message: str) -> None:
     sys.exit(1)
 
 
+_LOG_FORMAT = "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"
+_LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
+
+
+def _setup_logging(log_dir: Path) -> Path:
+    """Configure logging to a timestamped file in *log_dir*.
+
+    Returns the log file path.  The ``src`` logger hierarchy is set to INFO;
+    all messages flow to a single file handler.
+
+    Any existing file handlers on the ``src`` logger are closed and removed
+    first so that repeated calls (e.g. two ``fetch`` invocations in the same
+    process) do not accumulate handlers or duplicate log lines.
+    """
+    log_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = log_dir / f"fetcher_log_{timestamp}.txt"
+
+    src_logger = logging.getLogger("src")
+    for existing in src_logger.handlers[:]:
+        existing.close()
+        src_logger.removeHandler(existing)
+
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler.setFormatter(logging.Formatter(_LOG_FORMAT, datefmt=_LOG_DATEFMT))
+
+    src_logger.setLevel(logging.INFO)
+    src_logger.addHandler(handler)
+
+    return log_path
+
+
 # ---------------------------------------------------------------------------
 # CLI group
 # ---------------------------------------------------------------------------
@@ -144,13 +177,22 @@ def fetch(cycle: str | None) -> None:
     ensure_cycle_dir(cfg.workspace_base, target)
     _ok()
 
+    # Set up file logging into the cycle directory
+    log_path = _setup_logging(work_dir)
+    cli_logger = logging.getLogger("src.cli")
+    cli_logger.info("=== airac-data-fetcher run started ===")
+    cli_logger.info("Cycle: %s", target)
+    cli_logger.info("Directory: %s", work_dir)
+
     # Step 2 — in.json copy-forward
     _step(2, total, "Copying in.json from previous cycle")
     result = copy_in_json_forward(cfg.workspace_base, target)
     if result:
         _ok(f"copied from previous cycle")
+        cli_logger.info("in.json copied forward from previous cycle to %s", result)
     else:
         click.echo(" skipped (already present or no previous cycle found)")
+        cli_logger.info("in.json copy-forward skipped (already present or no previous cycle)")
 
     # Step 3 — eAIP HTML
     _step(3, total, "Fetching eAIP HTML (ENR-3.2 and ENR-3.3)")
@@ -188,7 +230,10 @@ def fetch(cycle: str | None) -> None:
     except SctFetchError as exc:
         _abort(str(exc))
 
+    cli_logger.info("=== All files ready — run complete ===")
+
     click.echo(f"\nAll files ready in: {work_dir}")
+    click.echo(f"Log file: {log_path}")
     click.echo("Run the SRD Parser, then use airac-archiver when out.json is written.")
     click.echo("  https://github.com/VFPC/airac-archiver")
 

@@ -60,13 +60,16 @@ archive_repo:   ""          # required — override in config.local.yaml
 
 sources:
   nats_srd:
-    page_url:    ""         # leave blank — SRD URL is computed from the cycle
-    sheet_name:  "Routes"   # [RULE:SRD-EXCEL-STRUCTURE] NATS sheet name
-    notes_sheet: "Notes"    # [RULE:SRD-EXCEL-STRUCTURE] NATS sheet name
+    page_url:    "https://..."  # informational only — SRD zip URL is computed
+                                # from the cycle ident, not from this field
+    sheet_name:  "Routes"       # [RULE:SRD-EXCEL-STRUCTURE] NATS sheet name
+    notes_sheet: "Notes"        # [RULE:SRD-EXCEL-STRUCTURE] NATS sheet name
   vatsim_sct:
-    url:         ""         # reserved — not currently used
+    url:         ""             # reserved — not currently used
   eaip:
-    page_url:    ""         # leave blank to use the built-in NATS AIP URL
+    page_url:    "https://..."  # NATS AIP index page URL — override here if
+                                # NATS changes it; leave blank to use the
+                                # hardcoded default in eaip_html.py
     files:
       - "EG-ENR-3.2-en-GB.html"
       - "EG-ENR-3.3-en-GB.html"
@@ -155,7 +158,7 @@ git push
 
 ### eAIP HTML
 
-The NATS AIP page ([nats-uk.ead-it.com](https://nats-uk.ead-it.com/cms-nats/opencms/en/Publication/AIP/)) lists each AIRAC cycle under a heading `AIRAC NN/YYYY`. The fetcher finds the heading matching the target cycle, follows the "Offline HTML Download" link, and extracts `EG-ENR-3.2-en-GB.html` and `EG-ENR-3.3-en-GB.html` from the zip. After extraction, the `EM.effectiveDateStart` meta tag in each file is checked against the cycle effective date. [`RULE:EAIP-PAGE-STRUCTURE`]
+The NATS AIP page ([nats-uk.ead-it.com](https://nats-uk.ead-it.com/cms-nats/opencms/en/Publications/AIP/)) lists each AIRAC cycle under a heading `AIRAC NN/YYYY`. The fetcher finds the heading matching the target cycle, follows the "Offline HTML Download" link, and extracts `EG-ENR-3.2-en-GB.html` and `EG-ENR-3.3-en-GB.html` from the zip. After extraction, the `EM.effectiveDateStart` meta tag in each file is checked against the cycle effective date. [`RULE:EAIP-PAGE-STRUCTURE`]
 
 ### NATS SRD
 

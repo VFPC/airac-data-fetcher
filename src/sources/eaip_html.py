@@ -21,6 +21,7 @@ read and compared against the cycle's effective_date to catch mismatches.
 
 from __future__ import annotations
 
+import logging
 import shutil
 import tempfile
 import urllib.request
@@ -33,6 +34,8 @@ from bs4 import BeautifulSoup
 
 from src.airac import AiracCycle
 from src.processing.zip_handler import download_zip
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -125,9 +128,12 @@ def _extract_targets(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
     """Extract the two target HTML files from *zip_buffer* into *dest_dir*.
 
     Files are located by basename regardless of their path within the archive.
-    Extraction is atomic: files are written to a temp directory first, then
-    moved to *dest_dir* only after all targets are confirmed present.  If
-    interrupted mid-extraction the destination is left unchanged.
+
+    Safety guarantee: all target files are staged in a temp directory first.
+    Only after every target is confirmed present are they moved into *dest_dir*
+    one by one.  If any move fails, all files already committed to *dest_dir*
+    are removed and the temp directory is cleaned up, so *dest_dir* is left in
+    its original state.
 
     Returns a dict mapping basename -> extracted Path.
     Raises EaipFetchError if either target is missing from the archive.
@@ -153,10 +159,15 @@ def _extract_targets(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
             )
 
         extracted: dict[str, Path] = {}
-        for name, tmp_path in staged.items():
-            final_path = dest_dir / name
-            shutil.move(str(tmp_path), str(final_path))
-            extracted[name] = final_path
+        try:
+            for name, tmp_path in staged.items():
+                final_path = dest_dir / name
+                shutil.move(str(tmp_path), str(final_path))
+                extracted[name] = final_path
+        except Exception:
+            for committed_path in extracted.values():
+                committed_path.unlink(missing_ok=True)
+            raise
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -226,20 +237,29 @@ def fetch_eaip_html(
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Fetch and parse the index page
+    logger.info("Fetching AIP index page: %s", index_url)
     page_html = _fetch_html(index_url, timeout=timeout_index)
+    logger.info("AIP index page fetched (%d bytes)", len(page_html))
 
     # 2. Locate the download URL for this cycle
     zip_url = _find_download_url(page_html, cycle, page_base_url=index_url)
+    logger.info("Resolved eAIP zip URL: %s", zip_url)
 
     # 3. Download the zip
     zip_buffer = download_zip(zip_url, timeout=timeout_zip)
+    logger.info("eAIP zip downloaded (%d bytes)", zip_buffer.getbuffer().nbytes)
 
     # 4. Extract target files
     extracted = _extract_targets(zip_buffer, dest_dir)
+    for name, path in extracted.items():
+        logger.info("Extracted %s (%d bytes)", name, path.stat().st_size)
 
     # 5. Validate effective dates
     if validate:
-        for path in extracted.values():
+        for name, path in extracted.items():
             _validate_effective_date(path, cycle.effective_date)
+            logger.info("Validated effective date for %s: %s", name, cycle.effective_date.isoformat())
+    else:
+        logger.info("Effective date validation skipped (validate=False)")
 
     return extracted

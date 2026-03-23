@@ -11,7 +11,7 @@ import urllib.error
 import zipfile
 from datetime import date
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -183,6 +183,27 @@ class TestExtractExcel:
             _extract_excel(buf, tmp_path)
         remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".srd_tmp_")]
         assert remaining == []
+
+    def test_rollback_committed_files_on_move_failure(self, tmp_path):
+        """If a move fails mid-loop, already-committed files must be removed."""
+        import shutil as _shutil
+        buf = _make_zip({SRD_XLSX_NAME: b"a", SRD_XLS_NAME: b"b"})
+        call_count = 0
+
+        def fail_on_second(src, dst):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise OSError("simulated move failure")
+            _shutil.move(src, dst)
+
+        with patch("src.sources.nats_srd.shutil.move", side_effect=fail_on_second):
+            with pytest.raises(OSError, match="simulated move failure"):
+                _extract_excel(buf, tmp_path)
+
+        # Neither file must remain in dest_dir after rollback
+        assert not (tmp_path / SRD_XLSX_NAME).exists()
+        assert not (tmp_path / SRD_XLS_NAME).exists()
 
 
 # ---------------------------------------------------------------------------

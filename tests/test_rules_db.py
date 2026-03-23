@@ -42,9 +42,14 @@ def _find_rules_db() -> Path | None:
         p = Path(env_path)
         return p if p.exists() else None
 
-    # Walk up from the repo root to find a sibling vFPC-Rules-Database repo
-    candidate = _REPO_ROOT.parent / "vFPC-Rules-Database" / "Documentation" / "rules_reference.md"
-    return candidate if candidate.exists() else None
+    # The rules database lives in vFPC-Hub (the project hub repo), which is
+    # a sibling of this repo.  Legacy name vFPC-Rules-Database is also checked
+    # so that CI environments with the old layout still work.
+    for sibling in ("vFPC-Hub", "vFPC-Rules-Database"):
+        candidate = _REPO_ROOT.parent / sibling / "Documentation" / "rules_reference.md"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _extract_tags(text: str) -> set[str]:
