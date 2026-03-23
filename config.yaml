@@ -14,9 +14,9 @@ workspace_base: ""
 
 sources:
   nats_srd:
-    # Override only if the NATS EAD page URL changes.
-    # Leave blank to use the hardcoded default in nats_srd.py.
-    page_url: ""
+    # NATS SRD download page (informational — the fetcher constructs the
+    # zip URL directly from the cycle ident via [RULE:SRD-DOWNLOAD-URL]).
+    page_url: "https://nats-uk.ead-it.com/cms-nats/opencms/en/Publications/digital-datasets/SRD/"
     # [RULE:SRD-EXCEL-STRUCTURE] Sheet names are NATS publishing conventions.
     sheet_name: "Routes"
     notes_sheet: "Notes"
@@ -25,9 +25,10 @@ sources:
     # directly via a hardcoded URL. Reserved for future override.
     url: ""
   eaip:
-    # Override only if the NATS AIP page URL changes.
-    # Leave blank to use the hardcoded default in eaip_html.py.
-    page_url: ""
+    # NATS AIP offline HTML download page. Override here if the URL changes;
+    # this value is passed to the fetcher as index_url.
+    # Confirmed working 2026-03-20 (issue #1 live end-to-end test).
+    page_url: "https://nats-uk.ead-it.com/cms-nats/opencms/en/Publications/AIP/"
     files:
       - "EG-ENR-3.2-en-GB.html"
       - "EG-ENR-3.3-en-GB.html"
