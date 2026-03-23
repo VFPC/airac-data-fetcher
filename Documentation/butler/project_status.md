@@ -1,61 +1,82 @@
 # AIRAC Data Fetcher — Project Status
 
-## Current Project State (2026-03-11, Session 10)
-
-### System Status: FEATURE-COMPLETE
-
-**Branch:** `first-try`
-**Tests:** 204 (all passing)
-**Dependencies:** requests, beautifulsoup4, openpyxl, pyyaml, click, pytest
-
-### What Exists
-
-- Project directory structure (`src/`, `tests/`, `Documentation/butler/`)
-- `config.yaml` template with placeholder URLs
-- `requirements.txt` with all planned dependencies
-- `.gitignore` for Python projects
-- Butler documentation (this file, next_session_prompt, session_status_summary)
-- **`src/airac.py`** — fully implemented, tested (29 tests)
-- **`src/config.py`** — fully implemented, tested (22 tests)
-- **`src/workspace/directory_manager.py`** — fully implemented, tested (19 tests)
-- **`src/sources/eaip_html.py`** — fully implemented, tested (25 tests)
-  - Scrapes NATS AIP page for cycle download link (`RULE:EAIP-PAGE-STRUCTURE`)
-  - Downloads zip, extracts ENR-3.2 and ENR-3.3 by basename
-  - Validates `EM.effectiveDateStart` meta tag against cycle effective date
-- **`src/sources/nats_srd.py`** — fully implemented, tested (22 tests)
-  - URL constructed directly from cycle: `AIRAC-{NN}-{YYYY}.zip` (`RULE:SRD-DOWNLOAD-URL`)
-  - Downloads zip, extracts Excel file(s) by extension
-  - HTTP/network errors wrapped as `SrdFetchError` with rule citation
-- **`src/sources/vatsim_sct.py`** — fully implemented, tested (35 tests)
-  - Queries GitHub releases API for VATSIM-UK/uk-controller-pack (`RULE:SCT-RELEASE-TAG`)
-  - Picks most recently published release matching `{YYYY}_{NN}[a-z]*`
-  - Downloads source zip; extracts `UK_{YYYY}_{NN}.sct` from `UK/data/` (`RULE:SCT-FILE-PATH`)
-
-- **`src/processing/excel_to_csv.py`** — fully implemented, tested (28 tests)
-  - Scans "What's New" sheet for `"What's New - {D}{ord} {Month} {YYYY} AIRAC"` header (`RULE:SRD-EXCEL-STRUCTURE`)
-  - Validates embedded date against `cycle.effective_date` — catches wrong-cycle downloads with operator-readable error
-  - Exports "Routes" → `Routes.csv` (SRD Parser input) and "Notes" → `Notes.csv`
-
-- **`src/cli.py`** — fully implemented, tested (25 tests)
-  - `fetch [--cycle YYNN]` — creates dir, copies in.json forward, fetches eAIP/SRD/SCT, converts Excel→CSV
-  - All domain errors caught cleanly; non-zero exit on failure
-  - Run via `python -m src fetch`
-  - Archive step handled by the separate **airac-archiver** tool: https://github.com/VFPC/airac-archiver
-
-### What Needs Work
-
-- Live end-to-end test against real NATS/GitHub sources
-- Populate `page_url` placeholders in `config.yaml` once confirmed
-- Merge `first-try` → `main` after live test passes
-- Optional: add `pyproject.toml` with `[project.scripts]` entry point
-
-### Archiver moved
-
-The archiver (`src/archive/archiver.py`) was extracted to its own repository
-in Session 10: **https://github.com/VFPC/airac-archiver**
-Run `airac-archiver` after the SRD Parser to package and stage cycle data.
+_Last updated: 2026-03-23_
 
 ---
 
-Last Updated: 2026-03-11
-Status: Feature-complete — all modules implemented and tested; live end-to-end test pending
+## System Status: PRODUCTION-READY
+
+**Branch:** `main`
+**Tests:** 222 (all passing, 0 skipped)
+**Dependencies:** beautifulsoup4, openpyxl, pyyaml, click, pytest
+
+---
+
+## Module Inventory
+
+| Module | Tests | Notes |
+|--------|-------|-------|
+| `src/airac.py` | 29 | AIRAC cycle date arithmetic; anchor 2024-01-25 = 2401 |
+| `src/config.py` | 22 | YAML loader with `config.local.yaml` deep-merge |
+| `src/workspace/directory_manager.py` | 19 | Cycle dir creation; `in.json` copy-forward |
+| `src/sources/eaip_html.py` | 31 | NATS AIP scrape → zip → extract → date validate |
+| `src/sources/nats_srd.py` | 27 | Deterministic SRD zip URL → Excel extract |
+| `src/sources/vatsim_sct.py` | 38 | GitHub releases API → source zip → SCT extract |
+| `src/processing/excel_to_csv.py` | 28 | "What's New" date validate → Routes.csv + Notes.csv |
+| `src/processing/zip_handler.py` | — | Shared HTTP downloader (covered by source tests) |
+| `src/cli.py` | 27 | Click `fetch` command; file logging to cycle dir |
+| `tests/test_rules_db.py` | 2 | Rules DB bidirectional tag check (requires vFPC-Hub sibling) |
+
+---
+
+## Key Properties
+
+- **Atomic extraction:** all three fetchers extract to a temp dir, verify completeness,
+  then move files into `dest_dir`. On any failure (missing file or move error) already-moved
+  files are rolled back and the temp dir is cleaned up. `dest_dir` is always left unchanged.
+- **Run logging:** each `fetch` invocation writes `fetcher_log_{timestamp}.txt` into the
+  cycle working directory alongside the data files. Existing file handlers are cleared on
+  repeated calls — no handler accumulation.
+- **Rules DB coverage:** `test_rules_db.py` verifies bidirectional tag consistency against
+  `vFPC-Hub/Documentation/rules_reference.md`. Requires `vFPC-Hub` to be a sibling repo
+  (or `VFPC_RULES_DB` env var set). All 6 registered tags verified.
+
+---
+
+## Config
+
+`config.yaml` is committed with confirmed live source URLs (verified 2026-03-20, issue #1):
+
+| Field | Value |
+|-------|-------|
+| `sources.eaip.page_url` | `https://nats-uk.ead-it.com/cms-nats/opencms/en/Publications/AIP/` |
+| `sources.nats_srd.page_url` | `https://nats-uk.ead-it.com/cms-nats/opencms/en/Publications/digital-datasets/SRD/` (informational only) |
+
+Machine-specific paths go in `config.local.yaml` (gitignored). Minimum required:
+
+```yaml
+workspace_base: "C:\\path\\to\\your\\vFPC files"
+```
+
+---
+
+## GitHub Issues — All Closed
+
+| # | Title | Closed |
+|---|-------|--------|
+| #1 | Live end-to-end test | 2026-03-20 |
+| #2 | Populate config.yaml source URLs | 2026-03-23 |
+| #3 | Merge first-try to main | 2026-03-20 (PR #7) |
+| #5 | Non-atomic extraction leaves partial files | 2026-03-23 |
+| #6 | Add run logging to cycle directory | 2026-03-23 |
+
+No open issues.
+
+---
+
+## Archiver
+
+The archiver is a separate tool: **https://github.com/VFPC/airac-archiver**
+
+After `fetch` completes and the SRD Parser has written `out.json`, run airac-archiver
+to package and stage the cycle files in `VFPC/airac-data`.
