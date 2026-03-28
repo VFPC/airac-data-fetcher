@@ -20,6 +20,8 @@ from src.airac import AiracCycle
 from src.sources.eaip_html import (
     EaipFetchError,
     _cycle_heading_text,
+    _extract_ad2_pages,
+    _extract_all,
     _extract_targets,
     _find_download_url,
     _validate_effective_date,
@@ -41,6 +43,13 @@ _BASE_URL = "https://nats-uk.ead-it.com/cms-nats/opencms/en/Publication/AIP/"
 
 ENR32_NAME = "EG-ENR-3.2-en-GB.html"
 ENR33_NAME = "EG-ENR-3.3-en-GB.html"
+ENR41_NAME = "EG-ENR-4.1-en-GB.html"
+ENR42_NAME = "EG-ENR-4.2-en-GB.html"
+
+ALL_REQUIRED = {ENR32_NAME, ENR33_NAME, ENR41_NAME, ENR42_NAME}
+
+EGEL_AD2_NAME = "EG-AD-2.EGEL-en-GB.html"
+EGLL_AD2_NAME = "EG-AD-2.EGLL-en-GB.html"
 
 
 def _make_meta_html(effective_date: date) -> str:
@@ -163,18 +172,31 @@ class TestFindDownloadUrl:
 # _extract_targets
 # ---------------------------------------------------------------------------
 
+def _make_required_zip(extra: dict[str, bytes] | None = None) -> io.BytesIO:
+    """Build a zip containing all four required ENR files plus any extras."""
+    files = {name: f"<html>{name}</html>".encode() for name in ALL_REQUIRED}
+    if extra:
+        files.update(extra)
+    return _make_zip(files)
+
+
 class TestExtractTargets:
-    def test_extracts_both_files(self, tmp_path):
+    def test_extracts_all_required_files(self, tmp_path):
         content32 = b"<html>enr32</html>"
-        content33 = b"<html>enr33</html>"
-        buf = _make_zip({ENR32_NAME: content32, ENR33_NAME: content33})
+        content41 = b"<html>enr41</html>"
+        buf = _make_zip({
+            ENR32_NAME: content32,
+            ENR33_NAME: b"<html>enr33</html>",
+            ENR41_NAME: content41,
+            ENR42_NAME: b"<html>enr42</html>",
+        })
         result = _extract_targets(buf, tmp_path)
-        assert set(result.keys()) == {ENR32_NAME, ENR33_NAME}
+        assert set(result.keys()) == ALL_REQUIRED
         assert result[ENR32_NAME].read_bytes() == content32
-        assert result[ENR33_NAME].read_bytes() == content33
+        assert result[ENR41_NAME].read_bytes() == content41
 
     def test_files_extracted_into_dest_dir(self, tmp_path):
-        buf = _make_zip({ENR32_NAME: b"a", ENR33_NAME: b"b"})
+        buf = _make_required_zip()
         result = _extract_targets(buf, tmp_path)
         for path in result.values():
             assert path.parent == tmp_path
@@ -184,39 +206,37 @@ class TestExtractTargets:
         buf = _make_zip({
             f"deep/nested/path/{ENR32_NAME}": b"32",
             f"another/level/{ENR33_NAME}": b"33",
+            f"eAIP/{ENR41_NAME}": b"41",
+            f"eAIP/{ENR42_NAME}": b"42",
         })
         result = _extract_targets(buf, tmp_path)
-        assert set(result.keys()) == {ENR32_NAME, ENR33_NAME}
+        assert set(result.keys()) == ALL_REQUIRED
 
-    def test_missing_file_raises(self, tmp_path):
-        buf = _make_zip({ENR32_NAME: b"only one"})
-        with pytest.raises(EaipFetchError, match=ENR33_NAME):
+    def test_missing_enr41_raises(self, tmp_path):
+        buf = _make_zip({ENR32_NAME: b"a", ENR33_NAME: b"b", ENR42_NAME: b"c"})
+        with pytest.raises(EaipFetchError, match=ENR41_NAME):
             _extract_targets(buf, tmp_path)
 
-    def test_both_missing_raises(self, tmp_path):
+    def test_all_missing_raises(self, tmp_path):
         buf = _make_zip({"unrelated.html": b"nothing"})
         with pytest.raises(EaipFetchError, match="missing expected files"):
             _extract_targets(buf, tmp_path)
 
     def test_extra_files_in_zip_are_ignored(self, tmp_path):
-        buf = _make_zip({
-            ENR32_NAME: b"32",
-            ENR33_NAME: b"33",
-            "EG-ENR-2.1-en-GB.html": b"ignore me",
-        })
+        buf = _make_required_zip({"EG-ENR-2.1-en-GB.html": b"ignore me"})
         result = _extract_targets(buf, tmp_path)
-        assert set(result.keys()) == {ENR32_NAME, ENR33_NAME}
+        assert set(result.keys()) == ALL_REQUIRED
         assert not (tmp_path / "EG-ENR-2.1-en-GB.html").exists()
 
     def test_no_partial_files_on_missing_target(self, tmp_path):
-        """When one target is missing, the other must NOT be left in dest_dir."""
+        """When one target is missing, others must NOT be left in dest_dir."""
         buf = _make_zip({ENR32_NAME: b"only one"})
         with pytest.raises(EaipFetchError):
             _extract_targets(buf, tmp_path)
         assert not (tmp_path / ENR32_NAME).exists()
 
     def test_temp_dir_cleaned_up_on_success(self, tmp_path):
-        buf = _make_zip({ENR32_NAME: b"32", ENR33_NAME: b"33"})
+        buf = _make_required_zip()
         _extract_targets(buf, tmp_path)
         remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".eaip_tmp_")]
         assert remaining == []
@@ -229,9 +249,9 @@ class TestExtractTargets:
         assert remaining == []
 
     def test_rollback_committed_files_on_move_failure(self, tmp_path):
-        """If the second move fails, the first committed file must be removed."""
+        """If any move fails, all previously committed files must be removed."""
         import shutil as _shutil
-        buf = _make_zip({ENR32_NAME: b"32", ENR33_NAME: b"33"})
+        buf = _make_required_zip()
         call_count = 0
 
         def fail_on_second(src, dst):
@@ -245,9 +265,126 @@ class TestExtractTargets:
             with pytest.raises(OSError, match="simulated move failure"):
                 _extract_targets(buf, tmp_path)
 
-        # Neither target file must remain in dest_dir
-        assert not (tmp_path / ENR32_NAME).exists()
-        assert not (tmp_path / ENR33_NAME).exists()
+        for name in ALL_REQUIRED:
+            assert not (tmp_path / name).exists()
+
+
+# ---------------------------------------------------------------------------
+# _extract_ad2_pages
+# ---------------------------------------------------------------------------
+
+class TestExtractAd2Pages:
+    def test_extracts_matching_files_to_ad2_subdir(self, tmp_path):
+        buf = _make_required_zip({
+            EGEL_AD2_NAME: b"<html>egel</html>",
+            EGLL_AD2_NAME: b"<html>egll</html>",
+        })
+        result = _extract_ad2_pages(buf, tmp_path)
+        assert set(result.keys()) == {EGEL_AD2_NAME, EGLL_AD2_NAME}
+        for path in result.values():
+            assert path.parent == tmp_path / "ad2"
+
+    def test_creates_ad2_subdir(self, tmp_path):
+        buf = _make_required_zip({EGEL_AD2_NAME: b"<html/>"})
+        _extract_ad2_pages(buf, tmp_path)
+        assert (tmp_path / "ad2").is_dir()
+
+    def test_no_ad2_files_returns_empty(self, tmp_path):
+        buf = _make_required_zip()
+        result = _extract_ad2_pages(buf, tmp_path)
+        assert result == {}
+
+    def test_ignores_non_ad2_files(self, tmp_path):
+        buf = _make_required_zip({
+            EGEL_AD2_NAME: b"<html>egel</html>",
+            "EG-ENR-2.1-en-GB.html": b"not ad2",
+        })
+        result = _extract_ad2_pages(buf, tmp_path)
+        assert set(result.keys()) == {EGEL_AD2_NAME}
+        assert not (tmp_path / "ad2" / "EG-ENR-2.1-en-GB.html").exists()
+
+    def test_located_by_basename_in_nested_path(self, tmp_path):
+        buf = _make_zip({f"html/eAIP/{EGEL_AD2_NAME}": b"<html>egel</html>"})
+        result = _extract_ad2_pages(buf, tmp_path)
+        assert EGEL_AD2_NAME in result
+        assert result[EGEL_AD2_NAME].read_bytes() == b"<html>egel</html>"
+
+    def test_temp_dir_cleaned_up_on_success(self, tmp_path):
+        buf = _make_required_zip({EGEL_AD2_NAME: b"<html/>"})
+        _extract_ad2_pages(buf, tmp_path)
+        remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".ad2_tmp_")]
+        assert remaining == []
+
+
+# ---------------------------------------------------------------------------
+# _extract_all — whole-operation atomicity
+# ---------------------------------------------------------------------------
+
+class TestExtractAll:
+    def test_extracts_enr_and_ad2_together(self, tmp_path):
+        buf = _make_required_zip({EGEL_AD2_NAME: b"<html>egel</html>"})
+        result, ad2_count = _extract_all(buf, tmp_path)
+        assert ALL_REQUIRED.issubset(set(result.keys()))
+        assert EGEL_AD2_NAME in result
+        assert ad2_count == 1
+
+    def test_ad2_goes_into_subdir(self, tmp_path):
+        buf = _make_required_zip({EGEL_AD2_NAME: b"<html/>"})
+        result, _ = _extract_all(buf, tmp_path)
+        assert result[EGEL_AD2_NAME].parent == tmp_path / "ad2"
+
+    def test_ad2_subdir_not_created_when_no_ad2_files(self, tmp_path):
+        buf = _make_required_zip()
+        _extract_all(buf, tmp_path)
+        assert not (tmp_path / "ad2").exists()
+
+    def test_missing_required_file_leaves_no_enr_files(self, tmp_path):
+        """If a required ENR file is absent, no files must be written at all."""
+        buf = _make_zip({ENR32_NAME: b"a", ENR33_NAME: b"b", EGEL_AD2_NAME: b"c"})
+        with pytest.raises(EaipFetchError, match="missing expected files"):
+            _extract_all(buf, tmp_path)
+        # Neither ENR files nor ad2/ must exist
+        for name in [ENR32_NAME, ENR33_NAME]:
+            assert not (tmp_path / name).exists()
+        assert not (tmp_path / "ad2").exists()
+
+    def test_move_failure_during_ad2_removes_created_ad2_dir(self, tmp_path):
+        """If a move failure occurs after ad2/ was freshly created, ad2/ must be removed."""
+        import shutil as _real_shutil
+        buf = _make_required_zip({EGEL_AD2_NAME: b"<html/>"})
+        original_move = _real_shutil.move
+
+        def fail_on_ad2(src, dst):
+            if Path(src).name == EGEL_AD2_NAME:
+                raise OSError("simulated failure")
+            original_move(src, dst)
+
+        with patch("src.sources.eaip_html.shutil.move", side_effect=fail_on_ad2):
+            with pytest.raises(OSError):
+                _extract_all(buf, tmp_path)
+
+        assert not (tmp_path / "ad2").exists()
+
+    def test_move_failure_during_ad2_rolls_back_enr_files(self, tmp_path):
+        """If an AD 2.2 move fails after ENR files were already committed,
+        the ENR files must be rolled back too."""
+        import shutil as _real_shutil
+        buf = _make_required_zip({EGEL_AD2_NAME: b"<html/>"})
+
+        original_move = _real_shutil.move
+
+        def safe_fail_on_ad2(src, dst):
+            if Path(src).name == EGEL_AD2_NAME:
+                raise OSError("simulated AD2 move failure")
+            original_move(src, dst)
+
+        with patch("src.sources.eaip_html.shutil.move", side_effect=safe_fail_on_ad2):
+            with pytest.raises(OSError, match="simulated AD2 move failure"):
+                _extract_all(buf, tmp_path)
+
+        # All ENR files that were moved must have been rolled back
+        for name in ALL_REQUIRED:
+            assert not (tmp_path / name).exists()
 
 
 # ---------------------------------------------------------------------------
@@ -291,11 +428,11 @@ class TestValidateEffectiveDate:
 class TestFetchEaipHtml:
     """End-to-end test of the public API with all network calls mocked."""
 
-    def _make_realistic_zip(self) -> io.BytesIO:
-        return _make_zip({
-            ENR32_NAME: _make_meta_html(CYCLE_2602.effective_date).encode(),
-            ENR33_NAME: _make_meta_html(CYCLE_2602.effective_date).encode(),
-        })
+    def _make_realistic_zip(self, extra: dict | None = None) -> io.BytesIO:
+        files = {name: _make_meta_html(CYCLE_2602.effective_date).encode() for name in ALL_REQUIRED}
+        if extra:
+            files.update(extra)
+        return _make_zip(files)
 
     def _patch_fetch(self, page_html: str, zip_buf: io.BytesIO):
         """Return a context manager that patches _fetch_html and download_zip."""
@@ -314,12 +451,29 @@ class TestFetchEaipHtml:
             download_zip=fakedownload_zip,
         )
 
-    def test_returns_both_files(self, tmp_path):
+    def test_returns_all_required_files(self, tmp_path):
         zip_buf = self._make_realistic_zip()
         page = _make_index_html(CYCLE_2602, "https://example.com/aip.zip")
         with self._patch_fetch(page, zip_buf):
             result = fetch_eaip_html(CYCLE_2602, tmp_path, index_url=_BASE_URL)
-        assert set(result.keys()) == {ENR32_NAME, ENR33_NAME}
+        assert ALL_REQUIRED.issubset(set(result.keys()))
+
+    def test_returns_ad2_files_when_present(self, tmp_path):
+        zip_buf = self._make_realistic_zip(
+            extra={EGEL_AD2_NAME: _make_meta_html(CYCLE_2602.effective_date).encode()}
+        )
+        page = _make_index_html(CYCLE_2602, "https://example.com/aip.zip")
+        with self._patch_fetch(page, zip_buf):
+            result = fetch_eaip_html(CYCLE_2602, tmp_path, index_url=_BASE_URL)
+        assert EGEL_AD2_NAME in result
+        assert result[EGEL_AD2_NAME].parent == tmp_path / "ad2"
+
+    def test_no_ad2_files_warns_but_does_not_raise(self, tmp_path):
+        zip_buf = self._make_realistic_zip()
+        page = _make_index_html(CYCLE_2602, "https://example.com/aip.zip")
+        with self._patch_fetch(page, zip_buf):
+            result = fetch_eaip_html(CYCLE_2602, tmp_path, index_url=_BASE_URL)
+        assert ALL_REQUIRED.issubset(set(result.keys()))
 
     def test_dest_dir_created_if_missing(self, tmp_path):
         target = tmp_path / "new" / "subdir"
@@ -340,19 +494,16 @@ class TestFetchEaipHtml:
             assert path.parent == tmp_path
 
     def test_validate_false_skips_meta_check(self, tmp_path):
-        """With validate=False a file with no meta tag is accepted."""
-        buf = _make_zip({ENR32_NAME: b"<html/>", ENR33_NAME: b"<html/>"})
+        """With validate=False files with no meta tag are accepted."""
+        buf = _make_zip({name: b"<html/>" for name in ALL_REQUIRED})
         page = _make_index_html(CYCLE_2602, "https://example.com/aip.zip")
         with self._patch_fetch(page, buf):
             result = fetch_eaip_html(CYCLE_2602, tmp_path, index_url=_BASE_URL, validate=False)
-        assert set(result.keys()) == {ENR32_NAME, ENR33_NAME}
+        assert ALL_REQUIRED.issubset(set(result.keys()))
 
     def test_validate_true_raises_on_date_mismatch(self, tmp_path):
         wrong_date = date(2000, 1, 1)
-        buf = _make_zip({
-            ENR32_NAME: _make_meta_html(wrong_date).encode(),
-            ENR33_NAME: _make_meta_html(wrong_date).encode(),
-        })
+        buf = _make_zip({name: _make_meta_html(wrong_date).encode() for name in ALL_REQUIRED})
         page = _make_index_html(CYCLE_2602, "https://example.com/aip.zip")
         with self._patch_fetch(page, buf):
             with pytest.raises(EaipFetchError, match="effective date mismatch"):
