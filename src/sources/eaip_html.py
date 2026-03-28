@@ -1,4 +1,4 @@
-"""Download UK eAIP ENR-3.2 and ENR-3.3 HTML files from the NATS AIP download page.
+"""Download UK eAIP HTML files from the NATS AIP download page.
 
 The NATS AIP page lists each AIRAC cycle under a heading in the form
 "AIRAC NN/YYYY" (e.g. "AIRAC 02/2026"). Under each heading there is a
@@ -10,10 +10,16 @@ containing all eAIP pages for that cycle.
 # are publishing conventions of the NATS EAD website.  If NATS changes
 # either string this fetcher must be updated.
 
-Once the zip is downloaded, the two target files are located by basename
-regardless of their path within the archive:
+Once the zip is downloaded:
+
+Required files (error if missing):
   - EG-ENR-3.2-en-GB.html
   - EG-ENR-3.3-en-GB.html
+  - EG-ENR-4.1-en-GB.html
+  - EG-ENR-4.2-en-GB.html
+
+Pattern-matched files (warning if none found, not an error):
+  - EG-AD-2.XXXX-en-GB.html  (one per UK aerodrome, extracted to ad2/ subdir)
 
 After extraction each file's <meta name="EM.effectiveDateStart"> tag is
 read and compared against the cycle's effective_date to catch mismatches.
@@ -46,11 +52,20 @@ _AIP_INDEX_URL = "https://nats-uk.ead-it.com/cms-nats/opencms/en/Publications/AI
 _HEADING_PREFIX = "AIRAC "          # h3 heading starts with this
 _LINK_TEXT = "Offline HTML Download"  # exact anchor text to match
 
-# The two filenames we need from the zip (matched by basename only)
+# Required files: error if any are missing from the zip (matched by basename)
 _TARGET_BASENAMES = frozenset([
     "EG-ENR-3.2-en-GB.html",
     "EG-ENR-3.3-en-GB.html",
+    "EG-ENR-4.1-en-GB.html",
+    "EG-ENR-4.2-en-GB.html",
 ])
+
+# AD 2.2 aerodrome pages: extracted by pattern (one file per UK aerodrome).
+# Matched when basename starts with "EG-AD-2." and ends with "-en-GB.html".
+# Not an error if absent — a warning is logged instead.
+_AD2_PREFIX = "EG-AD-2."
+_AD2_SUFFIX = "-en-GB.html"
+_AD2_SUBDIR = "ad2"
 
 _META_EFFECTIVE_DATE = "EM.effectiveDateStart"
 
@@ -174,6 +189,46 @@ def _extract_targets(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
     return extracted
 
 
+def _extract_ad2_pages(zip_buffer: "BytesIO", dest_dir: Path) -> dict[str, Path]:
+    """Extract all AD 2.2 aerodrome HTML pages from *zip_buffer* into *dest_dir/ad2/*.
+
+    Files are matched when their basename starts with ``EG-AD-2.`` and ends
+    with ``-en-GB.html``.  They are written into a ``ad2/`` subdirectory of
+    *dest_dir* so they are kept separate from the ENR files.
+
+    Returns a dict mapping basename -> extracted Path.
+    Returns an empty dict (no error) if no AD 2.2 files are found in the zip.
+    """
+    ad2_dir = dest_dir / _AD2_SUBDIR
+    ad2_dir.mkdir(parents=True, exist_ok=True)
+
+    extracted: dict[str, Path] = {}
+    tmp_dir = Path(tempfile.mkdtemp(dir=dest_dir, prefix=".ad2_tmp_"))
+    try:
+        with zipfile.ZipFile(zip_buffer) as zf:
+            for entry in zf.infolist():
+                name = Path(entry.filename).name
+                if name.startswith(_AD2_PREFIX) and name.endswith(_AD2_SUFFIX):
+                    tmp_path = tmp_dir / name
+                    tmp_path.write_bytes(zf.read(entry.filename))
+                    extracted[name] = tmp_path
+
+        committed: dict[str, Path] = {}
+        try:
+            for name, tmp_path in extracted.items():
+                final_path = ad2_dir / name
+                shutil.move(str(tmp_path), str(final_path))
+                committed[name] = final_path
+        except Exception:
+            for committed_path in committed.values():
+                committed_path.unlink(missing_ok=True)
+            raise
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return committed
+
+
 def _validate_effective_date(html_path: Path, expected: date) -> None:
     """Read the EM.effectiveDateStart meta tag from *html_path* and verify it
     matches *expected*.
@@ -216,12 +271,16 @@ def fetch_eaip_html(
     timeout_index: int = 30,
     timeout_zip: int = 120,
 ) -> dict[str, Path]:
-    """Download and extract the eAIP ENR-3.2 and ENR-3.3 HTML files for *cycle*.
+    """Download and extract eAIP HTML files for *cycle*.
+
+    Extracts four required ENR files (ENR 3.2, 3.3, 4.1, 4.2) plus all
+    AD 2.2 aerodrome pages found in the zip.
 
     Args:
         cycle:         The target AIRAC cycle.
         dest_dir:      Directory where the HTML files will be written.
-                       Created if it does not already exist.
+                       ENR files go directly into dest_dir; AD 2.2 files
+                       go into dest_dir/ad2/.  Created if not already present.
         index_url:     Override the AIP index page URL (mainly for testing).
         validate:      When True (default), verify the EM.effectiveDateStart
                        meta tag in each extracted file.
@@ -229,7 +288,8 @@ def fetch_eaip_html(
         timeout_zip:   HTTP timeout (seconds) for the zip download.
 
     Returns:
-        A dict mapping basename -> Path for each extracted file.
+        A dict mapping basename -> Path for every extracted file
+        (both ENR and AD 2.2 files).
 
     Raises:
         EaipFetchError: on any network, structure, or validation failure.
@@ -249,12 +309,25 @@ def fetch_eaip_html(
     zip_buffer = download_zip(zip_url, timeout=timeout_zip)
     logger.info("eAIP zip downloaded (%d bytes)", zip_buffer.getbuffer().nbytes)
 
-    # 4. Extract target files
+    # 4a. Extract required ENR files (error if any are missing)
+    zip_buffer.seek(0)
     extracted = _extract_targets(zip_buffer, dest_dir)
     for name, path in extracted.items():
         logger.info("Extracted %s (%d bytes)", name, path.stat().st_size)
 
-    # 5. Validate effective dates
+    # 4b. Extract AD 2.2 aerodrome pages (warning only if none found)
+    zip_buffer.seek(0)
+    ad2_files = _extract_ad2_pages(zip_buffer, dest_dir)
+    if ad2_files:
+        logger.info("Extracted %d AD 2.2 aerodrome pages into %s/ad2/", len(ad2_files), dest_dir)
+        extracted.update(ad2_files)
+    else:
+        logger.warning(
+            "No AD 2.2 aerodrome pages (EG-AD-2.*-en-GB.html) found in zip. "
+            "The eAIP archive format may have changed."
+        )
+
+    # 5. Validate effective dates for all extracted files
     if validate:
         for name, path in extracted.items():
             _validate_effective_date(path, cycle.effective_date)
