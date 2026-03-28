@@ -1,6 +1,6 @@
 # AIRAC Data Fetcher — Next Session Prompt
 
-_Last updated: 2026-03-23_
+_Last updated: 2026-03-28_
 
 ---
 
@@ -16,7 +16,7 @@ The ecosystem map is at `vFPC-Hub/Documentation/ecosystem.md`.
 ## Current State
 
 **Branch:** `main` — all issues closed, no open work
-**Tests:** 222 passing, 0 skipped
+**Tests:** 230 passing, 0 skipped
 **Status:** Production-ready and in active use
 
 ---
@@ -27,7 +27,7 @@ Downloads and prepares all input files for each AIRAC cycle:
 
 1. Creates the cycle working directory (`vFPC YYNN/`)
 2. Copies `in.json` forward from the previous cycle
-3. Fetches eAIP ENR-3.2 and ENR-3.3 HTML (NATS AIP page)
+3. Fetches eAIP ENR-3.2, ENR-3.3, ENR-4.1, ENR-4.2, and all AD 2.2 HTML (NATS AIP page)
 4. Fetches and extracts the NATS SRD Excel file
 5. Converts SRD Excel → `Routes.csv` + `Notes.csv`
 6. Fetches the VATSIM UK sector file from uk-controller-pack releases
@@ -42,9 +42,12 @@ https://github.com/VFPC/airac-archiver
 
 ## Key Implementation Notes
 
-- **Atomic extraction:** all fetchers extract to a temp dir, verify completeness, then
-  move files into `dest_dir`. If any move fails, committed files are rolled back.
-  `dest_dir` is always left in its original state on failure.
+- **Atomic extraction:** `_extract_all()` stages all files (ENR required + AD 2.2 optional)
+  into one shared temp dir, then commits in a single loop. On failure, committed files are
+  rolled back and any freshly-created `ad2/` directory is removed. `dest_dir` is always
+  left in its original state on failure.
+- **AD 2.2 extraction:** all `EG-AD-2.XXXX-en-GB.html` files land in `dest_dir/ad2/`.
+  Missing AD 2.2 files log a warning but do not raise. ENR 4.1/4.2 are required.
 - **Logging:** `_setup_logging(work_dir)` in cli.py attaches a `FileHandler` to the
   `src` logger hierarchy. Clears existing handlers on repeated calls.
 - **Rules DB:** `test_rules_db.py` finds `vFPC-Hub/Documentation/rules_reference.md`

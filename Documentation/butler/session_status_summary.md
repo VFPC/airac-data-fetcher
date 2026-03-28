@@ -1,6 +1,33 @@
 # AIRAC Data Fetcher — Session Status Summary
 
-_Last updated: 2026-03-23_
+_Last updated: 2026-03-28_
+
+---
+
+### Session 2026-03-28: Issue #12 — extract ENR 4.1, ENR 4.2, AD 2.2 from eAIP zip
+
+**Scope:** airac-data-fetcher — issue #12 closed (PR #13 merged)
+
+**Issue #12 — Fetch AD 2.2 aerodrome pages and ENR 4.1/4.2 navaid pages (closed):**
+- `_TARGET_BASENAMES` expanded to include `EG-ENR-4.1-en-GB.html` and `EG-ENR-4.2-en-GB.html`
+- New `_extract_ad2_pages()` helper matches all `EG-AD-2.XXXX-en-GB.html` files from the zip into `dest_dir/ad2/`
+- New `_extract_all()` replaces two separate extraction passes with a single atomic operation:
+  - One zip scan, one shared temp dir for all files (ENR required + AD 2.2 optional)
+  - All files committed in one loop; if any move fails, already-committed files **and** the freshly-created `ad2/` directory are rolled back
+  - Required ENR files still raise on absence; AD 2.2 absence is a warning only
+
+**Two rounds of Ari review — all findings resolved:**
+- Round 1 High: split-pass atomicity — ENR committed before AD2, mid-AD2 failure left partial state → fixed via `_extract_all()`
+- Round 1 Medium: `ad2/` pre-created before confirming matches → fixed, `mkdir` only called after staged files confirmed non-empty
+- Round 2 Medium: rollback removed files but left empty `ad2/` → fixed via `ad2_dir_created` flag + `rmdir()` on rollback
+
+**Validation:** 43 tests pass (up from 222 → now 43 in `test_eaip_html.py`; total suite 230)
+
+**Commits pushed to main:**
+- `d28ae33` — feat: extract ENR 4.1, ENR 4.2, and AD 2.2 pages from eAIP zip (#12)
+- `debeb09` — fix: restore whole-operation atomicity and tighten AD2 rollback (#12)
+- `e176841` — fix: rollback ad2/ directory on move failure, add dir-rollback test (#12)
+- `26c2ec2` — feat: extract ENR 4.1, ENR 4.2, and AD 2.2 pages; restore whole-operation atomicity (#12) (squash merge)
 
 ---
 

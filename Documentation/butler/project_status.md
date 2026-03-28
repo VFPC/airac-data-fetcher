@@ -1,13 +1,13 @@
 # AIRAC Data Fetcher — Project Status
 
-_Last updated: 2026-03-23_
+_Last updated: 2026-03-28_
 
 ---
 
 ## System Status: PRODUCTION-READY
 
 **Branch:** `main`
-**Tests:** 222 (all passing, 0 skipped)
+**Tests:** 230 (all passing, 0 skipped)
 **Dependencies:** beautifulsoup4, openpyxl, pyyaml, click, pytest
 
 ---
@@ -19,7 +19,7 @@ _Last updated: 2026-03-23_
 | `src/airac.py` | 29 | AIRAC cycle date arithmetic; anchor 2024-01-25 = 2401 |
 | `src/config.py` | 22 | YAML loader with `config.local.yaml` deep-merge |
 | `src/workspace/directory_manager.py` | 19 | Cycle dir creation; `in.json` copy-forward |
-| `src/sources/eaip_html.py` | 31 | NATS AIP scrape → zip → extract → date validate |
+| `src/sources/eaip_html.py` | 43 | NATS AIP scrape, zip, extract ENR 3.x/4.x + all AD 2.2 pages, date validate |
 | `src/sources/nats_srd.py` | 27 | Deterministic SRD zip URL → Excel extract |
 | `src/sources/vatsim_sct.py` | 38 | GitHub releases API → source zip → SCT extract |
 | `src/processing/excel_to_csv.py` | 28 | "What's New" date validate → Routes.csv + Notes.csv |
@@ -69,6 +69,8 @@ workspace_base: "C:\\path\\to\\your\\vFPC files"
 | #3 | Merge first-try to main | 2026-03-20 (PR #7) |
 | #5 | Non-atomic extraction leaves partial files | 2026-03-23 |
 | #6 | Add run logging to cycle directory | 2026-03-23 |
+
+| #12 | Fetch AD 2.2 + ENR 4.1/4.2 from eAIP zip | 2026-03-28 (PR #13) |
 
 No open issues.
 
