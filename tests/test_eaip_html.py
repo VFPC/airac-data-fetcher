@@ -21,6 +21,7 @@ from src.sources.eaip_html import (
     EaipFetchError,
     _cycle_heading_text,
     _extract_ad2_pages,
+    _extract_all,
     _extract_targets,
     _find_download_url,
     _validate_effective_date,
@@ -313,6 +314,60 @@ class TestExtractAd2Pages:
         _extract_ad2_pages(buf, tmp_path)
         remaining = [p for p in tmp_path.iterdir() if p.name.startswith(".ad2_tmp_")]
         assert remaining == []
+
+
+# ---------------------------------------------------------------------------
+# _extract_all — whole-operation atomicity
+# ---------------------------------------------------------------------------
+
+class TestExtractAll:
+    def test_extracts_enr_and_ad2_together(self, tmp_path):
+        buf = _make_required_zip({EGEL_AD2_NAME: b"<html>egel</html>"})
+        result, ad2_count = _extract_all(buf, tmp_path)
+        assert ALL_REQUIRED.issubset(set(result.keys()))
+        assert EGEL_AD2_NAME in result
+        assert ad2_count == 1
+
+    def test_ad2_goes_into_subdir(self, tmp_path):
+        buf = _make_required_zip({EGEL_AD2_NAME: b"<html/>"})
+        result, _ = _extract_all(buf, tmp_path)
+        assert result[EGEL_AD2_NAME].parent == tmp_path / "ad2"
+
+    def test_ad2_subdir_not_created_when_no_ad2_files(self, tmp_path):
+        buf = _make_required_zip()
+        _extract_all(buf, tmp_path)
+        assert not (tmp_path / "ad2").exists()
+
+    def test_missing_required_file_leaves_no_enr_files(self, tmp_path):
+        """If a required ENR file is absent, no files must be written at all."""
+        buf = _make_zip({ENR32_NAME: b"a", ENR33_NAME: b"b", EGEL_AD2_NAME: b"c"})
+        with pytest.raises(EaipFetchError, match="missing expected files"):
+            _extract_all(buf, tmp_path)
+        # Neither ENR files nor ad2/ must exist
+        for name in [ENR32_NAME, ENR33_NAME]:
+            assert not (tmp_path / name).exists()
+        assert not (tmp_path / "ad2").exists()
+
+    def test_move_failure_during_ad2_rolls_back_enr_files(self, tmp_path):
+        """If an AD 2.2 move fails after ENR files were already committed,
+        the ENR files must be rolled back too."""
+        import shutil as _real_shutil
+        buf = _make_required_zip({EGEL_AD2_NAME: b"<html/>"})
+
+        original_move = _real_shutil.move
+
+        def safe_fail_on_ad2(src, dst):
+            if Path(src).name == EGEL_AD2_NAME:
+                raise OSError("simulated AD2 move failure")
+            original_move(src, dst)
+
+        with patch("src.sources.eaip_html.shutil.move", side_effect=safe_fail_on_ad2):
+            with pytest.raises(OSError, match="simulated AD2 move failure"):
+                _extract_all(buf, tmp_path)
+
+        # All ENR files that were moved must have been rolled back
+        for name in ALL_REQUIRED:
+            assert not (tmp_path / name).exists()
 
 
 # ---------------------------------------------------------------------------

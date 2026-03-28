@@ -193,16 +193,16 @@ def _extract_ad2_pages(zip_buffer: "BytesIO", dest_dir: Path) -> dict[str, Path]
     """Extract all AD 2.2 aerodrome HTML pages from *zip_buffer* into *dest_dir/ad2/*.
 
     Files are matched when their basename starts with ``EG-AD-2.`` and ends
-    with ``-en-GB.html``.  They are written into a ``ad2/`` subdirectory of
-    *dest_dir* so they are kept separate from the ENR files.
+    with ``-en-GB.html``.  They are staged in a temp directory inside *dest_dir*
+    and only moved to *dest_dir/ad2/* after all files are confirmed present in
+    the staging area.  The ad2/ subdirectory is only created if at least one
+    file is found.  If staging or any move fails the temp dir is cleaned up and
+    no partial state is written to *dest_dir*.
 
     Returns a dict mapping basename -> extracted Path.
     Returns an empty dict (no error) if no AD 2.2 files are found in the zip.
     """
-    ad2_dir = dest_dir / _AD2_SUBDIR
-    ad2_dir.mkdir(parents=True, exist_ok=True)
-
-    extracted: dict[str, Path] = {}
+    staged: dict[str, Path] = {}
     tmp_dir = Path(tempfile.mkdtemp(dir=dest_dir, prefix=".ad2_tmp_"))
     try:
         with zipfile.ZipFile(zip_buffer) as zf:
@@ -211,11 +211,18 @@ def _extract_ad2_pages(zip_buffer: "BytesIO", dest_dir: Path) -> dict[str, Path]
                 if name.startswith(_AD2_PREFIX) and name.endswith(_AD2_SUFFIX):
                     tmp_path = tmp_dir / name
                     tmp_path.write_bytes(zf.read(entry.filename))
-                    extracted[name] = tmp_path
+                    staged[name] = tmp_path
+
+        if not staged:
+            return {}
+
+        # Only create ad2/ once we know there is something to put in it
+        ad2_dir = dest_dir / _AD2_SUBDIR
+        ad2_dir.mkdir(parents=True, exist_ok=True)
 
         committed: dict[str, Path] = {}
         try:
-            for name, tmp_path in extracted.items():
+            for name, tmp_path in staged.items():
                 final_path = ad2_dir / name
                 shutil.move(str(tmp_path), str(final_path))
                 committed[name] = final_path
@@ -227,6 +234,80 @@ def _extract_ad2_pages(zip_buffer: "BytesIO", dest_dir: Path) -> dict[str, Path]
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return committed
+
+
+def _extract_all(zip_buffer: "BytesIO", dest_dir: Path) -> tuple[dict[str, Path], int]:
+    """Extract all target files from *zip_buffer* in a single atomic operation.
+
+    This is the whole-operation extractor used by ``fetch_eaip_html``.  It
+    combines the required ENR file extraction and the AD 2.2 pattern extraction
+    into a single staging pass so that *dest_dir* is either fully updated or
+    left completely unchanged — there is no partially-written intermediate state.
+
+    All files are written to a single temp directory inside *dest_dir* first.
+    Only after every required file is confirmed present and all moves succeed are
+    any files committed to their final locations.  On any failure all already-
+    committed files are removed and the temp dir is cleaned up.
+
+    Args:
+        zip_buffer: In-memory zip buffer (seeked to position 0 by the caller).
+        dest_dir:   Directory for ENR files.  AD 2.2 files go into dest_dir/ad2/.
+
+    Returns:
+        A tuple of (extracted dict mapping basename -> Path, ad2_file_count).
+
+    Raises:
+        EaipFetchError: if any required ENR file is absent from the archive.
+    """
+    remaining_required = set(_TARGET_BASENAMES)
+    staged_enr:  dict[str, Path] = {}   # basename -> temp path, for ENR files
+    staged_ad2:  dict[str, Path] = {}   # basename -> temp path, for AD 2.2 files
+
+    tmp_dir = Path(tempfile.mkdtemp(dir=dest_dir, prefix=".eaip_tmp_"))
+    try:
+        with zipfile.ZipFile(zip_buffer) as zf:
+            for entry in zf.infolist():
+                name = Path(entry.filename).name
+                if name in remaining_required:
+                    tmp_path = tmp_dir / name
+                    tmp_path.write_bytes(zf.read(entry.filename))
+                    staged_enr[name] = tmp_path
+                    remaining_required.discard(name)
+                elif name.startswith(_AD2_PREFIX) and name.endswith(_AD2_SUFFIX):
+                    tmp_path = tmp_dir / name
+                    tmp_path.write_bytes(zf.read(entry.filename))
+                    staged_ad2[name] = tmp_path
+
+        if remaining_required:
+            raise EaipFetchError(
+                f"Zip archive is missing expected files: {sorted(remaining_required)}. "
+                "The eAIP archive format may have changed."
+            )
+
+        # Only create ad2/ if we actually have files for it
+        ad2_dir = dest_dir / _AD2_SUBDIR if staged_ad2 else None
+        if ad2_dir:
+            ad2_dir.mkdir(parents=True, exist_ok=True)
+
+        # Commit all files atomically — rollback everything on any failure
+        committed: dict[str, Path] = {}
+        try:
+            for name, tmp_path in staged_enr.items():
+                final_path = dest_dir / name
+                shutil.move(str(tmp_path), str(final_path))
+                committed[name] = final_path
+            for name, tmp_path in staged_ad2.items():
+                final_path = ad2_dir / name  # type: ignore[operator]
+                shutil.move(str(tmp_path), str(final_path))
+                committed[name] = final_path
+        except Exception:
+            for committed_path in committed.values():
+                committed_path.unlink(missing_ok=True)
+            raise
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return committed, len(staged_ad2)
 
 
 def _validate_effective_date(html_path: Path, expected: date) -> None:
@@ -309,18 +390,15 @@ def fetch_eaip_html(
     zip_buffer = download_zip(zip_url, timeout=timeout_zip)
     logger.info("eAIP zip downloaded (%d bytes)", zip_buffer.getbuffer().nbytes)
 
-    # 4a. Extract required ENR files (error if any are missing)
+    # 4. Extract all files atomically in a single pass.
+    # Required ENR files error if absent; AD 2.2 pages warn if none found.
+    # Neither ENR files nor ad2/ directory are written unless both passes succeed.
     zip_buffer.seek(0)
-    extracted = _extract_targets(zip_buffer, dest_dir)
+    extracted, ad2_count = _extract_all(zip_buffer, dest_dir)
     for name, path in extracted.items():
         logger.info("Extracted %s (%d bytes)", name, path.stat().st_size)
-
-    # 4b. Extract AD 2.2 aerodrome pages (warning only if none found)
-    zip_buffer.seek(0)
-    ad2_files = _extract_ad2_pages(zip_buffer, dest_dir)
-    if ad2_files:
-        logger.info("Extracted %d AD 2.2 aerodrome pages into %s/ad2/", len(ad2_files), dest_dir)
-        extracted.update(ad2_files)
+    if ad2_count:
+        logger.info("Extracted %d AD 2.2 aerodrome pages into %s/ad2/", ad2_count, dest_dir)
     else:
         logger.warning(
             "No AD 2.2 aerodrome pages (EG-AD-2.*-en-GB.html) found in zip. "
