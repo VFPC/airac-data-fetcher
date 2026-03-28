@@ -348,6 +348,23 @@ class TestExtractAll:
             assert not (tmp_path / name).exists()
         assert not (tmp_path / "ad2").exists()
 
+    def test_move_failure_during_ad2_removes_created_ad2_dir(self, tmp_path):
+        """If a move failure occurs after ad2/ was freshly created, ad2/ must be removed."""
+        import shutil as _real_shutil
+        buf = _make_required_zip({EGEL_AD2_NAME: b"<html/>"})
+        original_move = _real_shutil.move
+
+        def fail_on_ad2(src, dst):
+            if Path(src).name == EGEL_AD2_NAME:
+                raise OSError("simulated failure")
+            original_move(src, dst)
+
+        with patch("src.sources.eaip_html.shutil.move", side_effect=fail_on_ad2):
+            with pytest.raises(OSError):
+                _extract_all(buf, tmp_path)
+
+        assert not (tmp_path / "ad2").exists()
+
     def test_move_failure_during_ad2_rolls_back_enr_files(self, tmp_path):
         """If an AD 2.2 move fails after ENR files were already committed,
         the ENR files must be rolled back too."""

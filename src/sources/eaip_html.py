@@ -284,12 +284,18 @@ def _extract_all(zip_buffer: "BytesIO", dest_dir: Path) -> tuple[dict[str, Path]
                 "The eAIP archive format may have changed."
             )
 
-        # Only create ad2/ if we actually have files for it
-        ad2_dir = dest_dir / _AD2_SUBDIR if staged_ad2 else None
-        if ad2_dir:
-            ad2_dir.mkdir(parents=True, exist_ok=True)
+        # Only create ad2/ if we actually have files for it.
+        # Track whether we created it so we can remove it on rollback.
+        ad2_dir: Path | None = None
+        ad2_dir_created = False
+        if staged_ad2:
+            ad2_dir = dest_dir / _AD2_SUBDIR
+            if not ad2_dir.exists():
+                ad2_dir.mkdir(parents=True, exist_ok=True)
+                ad2_dir_created = True
 
-        # Commit all files atomically — rollback everything on any failure
+        # Commit all files atomically — rollback everything on any failure,
+        # including the ad2/ directory if we just created it.
         committed: dict[str, Path] = {}
         try:
             for name, tmp_path in staged_enr.items():
@@ -303,6 +309,12 @@ def _extract_all(zip_buffer: "BytesIO", dest_dir: Path) -> tuple[dict[str, Path]
         except Exception:
             for committed_path in committed.values():
                 committed_path.unlink(missing_ok=True)
+            # Remove the ad2/ directory only if we created it this call and it is now empty
+            if ad2_dir_created and ad2_dir is not None and ad2_dir.exists():
+                try:
+                    ad2_dir.rmdir()  # only removes if empty — safe to call unconditionally
+                except OSError:
+                    pass  # non-empty (pre-existing files from a previous cycle) — leave it
             raise
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
