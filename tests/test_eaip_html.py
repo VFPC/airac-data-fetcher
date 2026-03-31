@@ -45,8 +45,9 @@ ENR32_NAME = "EG-ENR-3.2-en-GB.html"
 ENR33_NAME = "EG-ENR-3.3-en-GB.html"
 ENR41_NAME = "EG-ENR-4.1-en-GB.html"
 ENR42_NAME = "EG-ENR-4.2-en-GB.html"
+ENR44_NAME = "EG-ENR-4.4-en-GB.html"
 
-ALL_REQUIRED = {ENR32_NAME, ENR33_NAME, ENR41_NAME, ENR42_NAME}
+ALL_REQUIRED = {ENR32_NAME, ENR33_NAME, ENR41_NAME, ENR42_NAME, ENR44_NAME}
 
 EGEL_AD2_NAME = "EG-AD-2.EGEL-en-GB.html"
 EGLL_AD2_NAME = "EG-AD-2.EGLL-en-GB.html"
@@ -173,7 +174,7 @@ class TestFindDownloadUrl:
 # ---------------------------------------------------------------------------
 
 def _make_required_zip(extra: dict[str, bytes] | None = None) -> io.BytesIO:
-    """Build a zip containing all four required ENR files plus any extras."""
+    """Build a zip containing all five required ENR files plus any extras."""
     files = {name: f"<html>{name}</html>".encode() for name in ALL_REQUIRED}
     if extra:
         files.update(extra)
@@ -189,6 +190,7 @@ class TestExtractTargets:
             ENR33_NAME: b"<html>enr33</html>",
             ENR41_NAME: content41,
             ENR42_NAME: b"<html>enr42</html>",
+            ENR44_NAME: b"<html>enr44</html>",
         })
         result = _extract_targets(buf, tmp_path)
         assert set(result.keys()) == ALL_REQUIRED
@@ -208,6 +210,7 @@ class TestExtractTargets:
             f"another/level/{ENR33_NAME}": b"33",
             f"eAIP/{ENR41_NAME}": b"41",
             f"eAIP/{ENR42_NAME}": b"42",
+            f"eAIP/{ENR44_NAME}": b"44",
         })
         result = _extract_targets(buf, tmp_path)
         assert set(result.keys()) == ALL_REQUIRED

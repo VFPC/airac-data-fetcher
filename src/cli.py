@@ -14,7 +14,7 @@ fetch
 
     1. Create the cycle working directory under workspace_base.
     2. Copy in.json forward from the previous cycle (skipped if already present).
-    3. Fetch eAIP ENR-3.2 and ENR-3.3 HTML files from the NATS AIP page.
+    3. Fetch eAIP ENR-3.2, ENR-3.3, ENR-4.1, ENR-4.2, ENR-4.4 HTML files from the NATS AIP page.
     4. Fetch the SRD Excel zip from NATS and extract the .xlsx file.
     5. Validate and convert the SRD Excel to Routes.csv and Notes.csv.
     6. Fetch the VATSIM UK sector file (.sct) from the uk-controller-pack release.
@@ -195,7 +195,7 @@ def fetch(cycle: str | None) -> None:
         cli_logger.info("in.json copy-forward skipped (already present or no previous cycle)")
 
     # Step 3 — eAIP HTML
-    _step(3, total, "Fetching eAIP HTML (ENR-3.2 and ENR-3.3)")
+    _step(3, total, "Fetching eAIP HTML (ENR-3.2, ENR-3.3, ENR-4.1, ENR-4.2, ENR-4.4)")
     try:
         kwargs: dict = {}
         if cfg.sources.eaip.page_url:
