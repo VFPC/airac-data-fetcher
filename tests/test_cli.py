@@ -12,7 +12,7 @@ from click.testing import CliRunner
 
 from src.airac import cycle_for_date
 from src.cli import _resolve_cycle, cli
-from src.config import Config, EaipConfig, NatsSrdConfig, SourcesConfig, VatsimSctConfig
+from src.config import Config, EaipConfig, IrishEaipConfig, NatsSrdConfig, SourcesConfig, VatsimSctConfig
 from src.processing.excel_to_csv import ExcelValidationError
 from src.sources.eaip_html import EaipFetchError
 from src.sources.nats_srd import SrdFetchError
@@ -45,6 +45,7 @@ def _make_config(tmp_path: Path) -> Config:
             nats_srd=NatsSrdConfig(page_url="", sheet_name="Routes", notes_sheet="Notes"),
             vatsim_sct=VatsimSctConfig(url=""),
             eaip=EaipConfig(page_url="", files=()),
+            irish_eaip=IrishEaipConfig(page_url=""),
         ),
     )
 
@@ -110,6 +111,7 @@ class TestFetchCommand:
             patch("src.cli.fetch_srd", return_value={"SRD.xlsx": excel_path}),
             patch("src.cli.convert_srd_excel", return_value={"Routes": Path("Routes.csv"), "Notes": Path("Notes.csv")}),
             patch("src.cli.fetch_sct", return_value=Path("UK_2026_03.sct")),
+            patch("src.cli.fetch_irish_enr44", return_value=Path("EI_ENR_4_4_EN.pdf")),
         ):
             return runner.invoke(cli, ["fetch", "--cycle", "2603"] + (args or []))
 
@@ -246,6 +248,7 @@ class TestFetchCommand:
                 nats_srd=NatsSrdConfig(page_url="", sheet_name="Routes", notes_sheet="Notes"),
                 vatsim_sct=VatsimSctConfig(url=""),
                 eaip=EaipConfig(page_url="https://custom.url/aip", files=()),
+                irish_eaip=IrishEaipConfig(page_url=""),
             ),
         )
         runner = CliRunner()
@@ -258,6 +261,7 @@ class TestFetchCommand:
             patch("src.cli.fetch_srd", return_value={"SRD.xlsx": excel_path}),
             patch("src.cli.convert_srd_excel", return_value={}),
             patch("src.cli.fetch_sct", return_value=Path("UK_2026_03.sct")),
+            patch("src.cli.fetch_irish_enr44", return_value=None),
         ):
             runner.invoke(cli, ["fetch", "--cycle", "2603"])
         _, kwargs = mock_eaip.call_args

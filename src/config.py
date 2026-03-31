@@ -38,10 +38,16 @@ class EaipConfig:
 
 
 @dataclass(frozen=True)
+class IrishEaipConfig:
+    page_url: str
+
+
+@dataclass(frozen=True)
 class SourcesConfig:
     nats_srd: NatsSrdConfig
     vatsim_sct: VatsimSctConfig
     eaip: EaipConfig
+    irish_eaip: IrishEaipConfig
 
 
 @dataclass(frozen=True)
@@ -99,12 +105,18 @@ def _parse(raw: dict) -> Config:
         files=tuple(eaip.get("files") or []),
     )
 
+    irish = src.get("irish_eaip") or {}
+    irish_eaip_cfg = IrishEaipConfig(
+        page_url=irish.get("page_url") or "",
+    )
+
     return Config(
         workspace_base=workspace_base,
         sources=SourcesConfig(
             nats_srd=nats_srd,
             vatsim_sct=vatsim_sct,
             eaip=eaip_cfg,
+            irish_eaip=irish_eaip_cfg,
         ),
     )
 

@@ -35,3 +35,9 @@ sources:
       - "EG-ENR-4.1-en-GB.html"
       - "EG-ENR-4.2-en-GB.html"
       - "EG-ENR-4.4-en-GB.html"
+  irish_eaip:
+    # AirNav Ireland IAIP package page. ENR 4.4 PDF link is scraped from here
+    # each cycle — the GUID in the download URL changes when AirNav updates the
+    # document. Override if the page URL moves. [RULE:IRISH-EAIP-ENR44-URL]
+    # Confirmed working 2026-03-31.
+    page_url: "https://www.airnav.ie/air-traffic-management/aeronautical-information-management/aip-package"

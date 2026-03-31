@@ -18,6 +18,7 @@ fetch
     4. Fetch the SRD Excel zip from NATS and extract the .xlsx file.
     5. Validate and convert the SRD Excel to Routes.csv and Notes.csv.
     6. Fetch the VATSIM UK sector file (.sct) from the uk-controller-pack release.
+    7. Fetch EI_ENR_4_4_EN.pdf from the AirNav Ireland IAIP package page (non-fatal).
 
 After fetching, run the SRD Parser to produce out.json, then use the
 airac-archiver tool to package and stage the files: https://github.com/VFPC/airac-archiver
@@ -37,6 +38,7 @@ from src.airac import AiracCycle, current_cycle, cycle_for_date
 from src.config import ConfigError, load
 from src.processing.excel_to_csv import ExcelValidationError, convert_srd_excel
 from src.sources.eaip_html import EaipFetchError, fetch_eaip_html
+from src.sources.irish_eaip_pdf import fetch_irish_enr44
 from src.sources.nats_srd import SrdFetchError, fetch_srd
 from src.sources.vatsim_sct import SctFetchError, fetch_sct
 from src.workspace.directory_manager import (
@@ -170,7 +172,7 @@ def fetch(cycle: str | None) -> None:
     click.echo(f"\nCycle:     {target}")
     click.echo(f"Directory: {work_dir}\n")
 
-    total = 6
+    total = 7
 
     # Step 1 — working directory
     _step(1, total, "Creating working directory")
@@ -229,6 +231,19 @@ def fetch(cycle: str | None) -> None:
         _ok(sct_path.name)
     except SctFetchError as exc:
         _abort(str(exc))
+
+    # Step 7 — Irish ENR 4.4 PDF (non-fatal: warns and continues if unavailable)
+    _step(7, total, "Fetching Irish eAIP ENR 4.4 PDF (EI_ENR_4_4_EN.pdf)")
+    kwargs_ie: dict = {}
+    if cfg.sources.irish_eaip.page_url:
+        kwargs_ie["page_url"] = cfg.sources.irish_eaip.page_url
+    ie_path = fetch_irish_enr44(work_dir, **kwargs_ie)
+    if ie_path:
+        _ok(ie_path.name)
+        cli_logger.info("EI_ENR_4_4_EN.pdf written to %s", ie_path)
+    else:
+        click.echo(" skipped (unavailable — see log for details)")
+        cli_logger.warning("EI_ENR_4_4_EN.pdf fetch skipped — check log for details")
 
     cli_logger.info("=== All files ready — run complete ===")
 
