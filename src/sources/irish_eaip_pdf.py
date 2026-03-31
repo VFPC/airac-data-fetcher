@@ -28,6 +28,7 @@ import re
 import shutil
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -152,8 +153,11 @@ def fetch_irish_enr44(
         )
         return None
 
+    parsed = urllib.parse.urlparse(page_url)
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+
     try:
-        pdf_url, guid = _find_enr44_url(html)
+        pdf_url, guid = _find_enr44_url(html, base_url=base_url)
     except IrishEaipFetchError as exc:
         logger.warning("%s", exc)
         return None

@@ -157,6 +157,24 @@ class TestFetchIrishEnr44Success:
                 fetch_irish_enr44(tmp_path)
         assert captured[0] == _IAIP_PACKAGE_URL
 
+    def test_pdf_url_uses_same_origin_as_page_url(self, tmp_path):
+        """PDF must be downloaded from the same origin as the overridden page_url.
+
+        Regression test for the gap identified in PR review: _find_enr44_url()
+        was called without a base derived from page_url, so the PDF always
+        downloaded from _BASE_URL (airnav.ie) even when page_url was overridden.
+        """
+        captured_pdf_urls = []
+        def fake_download(url, dest, timeout=60):
+            captured_pdf_urls.append(url)
+            dest.write_bytes(b"pdf")
+        html = _make_iaip_page(FAKE_GUID)
+        with _patch_fetch_page(html):
+            with patch("src.sources.irish_eaip_pdf._download_pdf", side_effect=fake_download):
+                fetch_irish_enr44(tmp_path, page_url="https://mirror.example.com/some/path")
+        assert len(captured_pdf_urls) == 1
+        assert captured_pdf_urls[0].startswith("https://mirror.example.com")
+
 
 # ---------------------------------------------------------------------------
 # fetch_irish_enr44 — non-fatal failure paths (returns None, no raise)
