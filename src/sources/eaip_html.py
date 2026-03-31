@@ -142,7 +142,7 @@ def _find_download_url(page_html: str, cycle: AiracCycle, page_base_url: str) ->
 
 
 def _extract_targets(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
-    """Extract the two target HTML files from *zip_buffer* into *dest_dir*.
+    """Extract the five target HTML files from *zip_buffer* into *dest_dir*.
 
     Files are located by basename regardless of their path within the archive.
 
@@ -153,7 +153,7 @@ def _extract_targets(zip_buffer: BytesIO, dest_dir: Path) -> dict[str, Path]:
     its original state.
 
     Returns a dict mapping basename -> extracted Path.
-    Raises EaipFetchError if either target is missing from the archive.
+    Raises EaipFetchError if any target is missing from the archive.
     """
     remaining = set(_TARGET_BASENAMES)
     staged: dict[str, Path] = {}
@@ -368,7 +368,7 @@ def fetch_eaip_html(
 ) -> dict[str, Path]:
     """Download and extract eAIP HTML files for *cycle*.
 
-    Extracts four required ENR files (ENR 3.2, 3.3, 4.1, 4.2) plus all
+    Extracts five required ENR files (ENR 3.2, 3.3, 4.1, 4.2, 4.4) plus all
     AD 2.2 aerodrome pages found in the zip.
 
     Args:
