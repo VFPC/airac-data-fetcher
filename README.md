@@ -1,6 +1,8 @@
 # AIRAC Data Fetcher
 
-Python CLI tool that automates the download, extraction, and preparation of input files needed for each AIRAC cycle in the [VFPC](https://github.com/VFPC) ecosystem. It replaces the manual steps in the AIRAC maintenance checklist.
+Python CLI tool that prepares the working directory for each AIRAC cycle in the [VFPC](https://github.com/VFPC) ecosystem.
+
+This tool fetches and prepares source files. It does **not** run `New-SRDParser`, and it does **not** archive cycle data into `airac-data`.
 
 ## What it does
 
@@ -8,17 +10,23 @@ For a given AIRAC cycle, the tool:
 
 1. Creates the cycle working directory (`vFPC YYNN/`)
 2. Copies `in.json` forward from the previous cycle
-3. Downloads the **UK eAIP** ENR-3.2 and ENR-3.3 HTML files from the NATS AIP page
-4. Downloads the **NATS SRD** Excel workbook and converts it to `Routes.csv` and `Notes.csv`
-5. Downloads the **VATSIM UK sector file** (`.sct`) from the uk-controller-pack GitHub release
-6. After you run the SRD Parser: zips all files and stages them in `VFPC/airac-data` for review
+3. Downloads the UK eAIP HTML files needed by downstream tools
+4. Downloads the NATS SRD workbook and converts it to `Routes.csv` and `Notes.csv`
+5. Downloads the VATSIM UK sector file (`.sct`)
+6. Attempts to fetch the Irish ENR 4.4 PDF as a non-fatal support input
+
+After `fetch` completes:
+
+- run [VFPC/New-SRDParser](https://github.com/VFPC/New-SRDParser) to produce `out.json`
+- if you want to archive the cycle, run [VFPC/airac-archiver](https://github.com/VFPC/airac-archiver)
 
 ## Related repos
 
 | Repo | Purpose |
 |------|---------|
 | [VFPC/New-SRDParser](https://github.com/VFPC/New-SRDParser) | Reads `Routes.csv`, `.sct`, and `in.json` to produce `out.json` |
-| [VFPC/AIP-Parser](https://github.com/VFPC/AIP-Parser) | Reads `EG-ENR-3.2-en-GB.html` and `EG-ENR-3.3-en-GB.html` |
+| [VFPC/AIP-Parser](https://github.com/VFPC/AIP-Parser) | Reads the fetched eAIP HTML files |
+| [VFPC/airac-archiver](https://github.com/VFPC/airac-archiver) | Copies allowlisted flat files into `airac-data` and stages them for review |
 | [VFPC/airac-data](https://github.com/VFPC/airac-data) | Long-term archive of prepared cycle files |
 | [VFPC/vFPC-Rules-Database](https://github.com/VFPC/vFPC-Rules-Database) | Traceability index for aviation rules used in this tool |
 
@@ -27,8 +35,6 @@ For a given AIRAC cycle, the tool:
 ## Prerequisites
 
 - Python 3.11 or later
-- Git (for the `archive` command's `git add` staging step)
-- A local clone of [VFPC/airac-data](https://github.com/VFPC/airac-data)
 
 Install Python dependencies:
 
@@ -40,39 +46,38 @@ pip install -r requirements.txt
 
 ## Configuration
 
-All configuration lives in `config.yaml` at the project root. Create a `config.local.yaml` alongside it (gitignored) for your machine-specific paths — it deep-merges on top of `config.yaml` automatically.
+All configuration lives in `config.yaml` at the project root. Create a `config.local.yaml` alongside it (gitignored) for your machine-specific path overrides.
 
 ### Minimum config.local.yaml
 
 ```yaml
 workspace_base: "C:\\path\\to\\your\\vFPC files"
-archive_repo:   "C:\\path\\to\\your\\airac-data"
 ```
 
-- **`workspace_base`** — directory where per-cycle working folders are created. Each cycle gets a subfolder named `vFPC YYNN` (e.g. `vFPC 2603`).
-- **`archive_repo`** — path to your local clone of `VFPC/airac-data`. The archiver writes the zip and manifest here and stages them with `git add`.
+- `workspace_base` — directory where per-cycle working folders are created. Each cycle gets a subfolder named `vFPC YYNN` (for example `vFPC 2603`).
 
 ### Full config reference
 
 ```yaml
 workspace_base: ""          # required — override in config.local.yaml
-archive_repo:   ""          # required — override in config.local.yaml
 
 sources:
   nats_srd:
     page_url:    "https://..."  # informational only — SRD zip URL is computed
-                                # from the cycle ident, not from this field
     sheet_name:  "Routes"       # [RULE:SRD-EXCEL-STRUCTURE] NATS sheet name
     notes_sheet: "Notes"        # [RULE:SRD-EXCEL-STRUCTURE] NATS sheet name
   vatsim_sct:
     url:         ""             # reserved — not currently used
   eaip:
-    page_url:    "https://..."  # NATS AIP index page URL — override here if
-                                # NATS changes it; leave blank to use the
-                                # hardcoded default in eaip_html.py
+    page_url:    "https://..."  # NATS AIP index page URL
     files:
       - "EG-ENR-3.2-en-GB.html"
       - "EG-ENR-3.3-en-GB.html"
+      - "EG-ENR-4.1-en-GB.html"
+      - "EG-ENR-4.2-en-GB.html"
+      - "EG-ENR-4.4-en-GB.html"
+  irish_eaip:
+    page_url:    "https://..."  # AirNav Ireland IAIP package page
 ```
 
 ---
@@ -87,13 +92,11 @@ Run the tool as a Python module from the project root.
 python -m src fetch --cycle YYNN
 ```
 
-Runs steps 1–6 in order. Prints progress for each step. Stops immediately on any error with a descriptive message.
-
-**Examples:**
+Examples:
 
 ```
 python -m src fetch --cycle 2603
-python -m src fetch --cycle 2601
+python -m src fetch --cycle 2604
 ```
 
 Omit `--cycle` to use the current active AIRAC cycle:
@@ -102,55 +105,47 @@ Omit `--cycle` to use the current active AIRAC cycle:
 python -m src fetch
 ```
 
-**What gets written to the working directory:**
+### What gets written to the working directory
 
 | File | Source |
 |------|--------|
 | `in.json` | Copied forward from the previous cycle's directory |
 | `EG-ENR-3.2-en-GB.html` | NATS AIP offline HTML download |
 | `EG-ENR-3.3-en-GB.html` | NATS AIP offline HTML download |
+| `EG-ENR-4.1-en-GB.html` | NATS AIP offline HTML download |
+| `EG-ENR-4.2-en-GB.html` | NATS AIP offline HTML download |
+| `EG-ENR-4.4-en-GB.html` | NATS AIP offline HTML download |
 | `UK_YYYY_NN.sct` | VATSIM-UK uk-controller-pack release |
 | `Routes.csv` | Converted from the NATS SRD Excel workbook |
 | `Notes.csv` | Converted from the NATS SRD Excel workbook |
-
-### Archive a cycle
-
-After `fetch` has completed and you have run the SRD Parser (so `out.json` is present):
-
-```
-python -m src archive --cycle YYNN
-```
-
-This:
-- Collects all seven required files from the cycle working directory
-- Creates `{archive_repo}/vFPC YYNN/vFPC YYNN.zip`
-- Writes `{archive_repo}/vFPC YYNN/manifest.md`
-- Runs `git add` on both files so they are staged for your review
-
-Then review and commit in the `airac-data` repo when you are satisfied.
+| `EI_ENR_4_4_EN.pdf` | Irish IAIP package page fetch, when available |
 
 ---
 
 ## Typical workflow
 
 ```
-# 1. Fetch all source files
+# 1. Fetch source files into the cycle working directory
 python -m src fetch --cycle 2603
 
-# 2. Run New-SRDParser manually against the working directory
+# 2. Run New-SRDParser manually against that working directory
 #    (this writes out.json into the cycle folder)
 
-# 3. Run AIP-Parser manually if needed
-
-# 4. Archive and stage
-python -m src archive --cycle 2603
-
-# 5. Review in the airac-data repo and commit
-cd path\to\airac-data
-git status
-git commit -m "Add vFPC 2603 archive"
-git push
+# 3. If you want to archive the cycle, run airac-archiver
+#    in the separate airac-archiver repo
 ```
+
+### About the dot releases in airac-data
+
+The fetcher does **not** create `out.2603.1.json`, `out.2603.2.json`, and so on.
+
+Those files are created later by `airac-archiver` when a cycle is archived. They are archive revisions of the **same AIRAC cycle**, not separate AIRAC cycles:
+
+- `out.2603.1.json` = first archived parser output for AIRAC 2603
+- `out.2603.2.json` = a later re-archive of AIRAC 2603 after a parser rerun or correction
+- `out.2603.3.json` = another later archive of the same cycle
+
+In other words, the number after the second dot is an archive version counter for that cycle.
 
 ---
 
@@ -158,7 +153,7 @@ git push
 
 ### eAIP HTML
 
-The NATS AIP page ([nats-uk.ead-it.com](https://nats-uk.ead-it.com/cms-nats/opencms/en/Publications/AIP/)) lists each AIRAC cycle under a heading `AIRAC NN/YYYY`. The fetcher finds the heading matching the target cycle, follows the "Offline HTML Download" link, and extracts `EG-ENR-3.2-en-GB.html` and `EG-ENR-3.3-en-GB.html` from the zip. After extraction, the `EM.effectiveDateStart` meta tag in each file is checked against the cycle effective date. [`RULE:EAIP-PAGE-STRUCTURE`]
+The NATS AIP page ([nats-uk.ead-it.com](https://nats-uk.ead-it.com/cms-nats/opencms/en/Publications/AIP/)) lists each AIRAC cycle under a heading `AIRAC NN/YYYY`. The fetcher finds the heading matching the target cycle, follows the "Offline HTML Download" link, and extracts the required ENR HTML files from the downloaded archive. After extraction, the `EM.effectiveDateStart` meta tag in each file is checked against the cycle effective date. [`RULE:EAIP-PAGE-STRUCTURE`]
 
 ### NATS SRD
 
@@ -168,7 +163,7 @@ After download, the "What's New" sheet header is read and the embedded date is v
 
 ### VATSIM UK sector file
 
-The GitHub releases API for `VATSIM-UK/uk-controller-pack` is queried. The most recently published release whose tag matches `{YYYY}_{NN}[a-z]*` is selected (latest patch letter wins). The `.sct` file is extracted from `UK/data/UK_{YYYY}_{NN}.sct` inside the source zip. [`RULE:SCT-RELEASE-TAG`] [`RULE:SCT-FILE-PATH`]
+The GitHub releases API for `VATSIM-UK/uk-controller-pack` is queried. The most recently published release whose tag matches `{YYYY}_{NN}[a-z]*` is selected (latest patch letter wins). The `.sct` file is extracted from `UK/data/UK_{YYYY}_{NN}.sct` inside the source archive. [`RULE:SCT-RELEASE-TAG`] [`RULE:SCT-FILE-PATH`]
 
 ---
 
@@ -181,9 +176,7 @@ All errors print a human-readable message and exit with a non-zero code. Common 
 | `Could not find heading 'AIRAC NN/YYYY' on AIP page` | NATS changed the page structure, or the cycle is not yet published |
 | `HTTP 404 fetching SRD zip` | The SRD for this cycle is not yet available, or the URL pattern changed |
 | `No GitHub release found for cycle YYNN` | VATSIM-UK has not yet published a release for this cycle |
-| `SRD workbook date mismatch` | The downloaded Excel file is for a different cycle — check the NATS page |
-| `Cannot archive cycle YYNN — missing files` | One or more required files are missing; check that `fetch` completed and `out.json` was written by the SRD Parser |
-| `git add failed` | The `archive_repo` path is not a valid git repository, or git is not on the PATH |
+| `SRD workbook date mismatch` | The downloaded Excel file is for a different cycle |
 
 ---
 
@@ -195,7 +188,7 @@ All errors print a human-readable message and exit with a non-zero code. Common 
 python -m pytest
 ```
 
-All 265 tests should pass. The rules database validation test (`test_rules_db.py`) skips gracefully if `vFPC-Rules-Database` is not cloned as a sibling of this repo.
+The rules database validation test (`test_rules_db.py`) skips gracefully if `vFPC-Rules-Database` is not cloned as a sibling of this repo.
 
 ### Project structure
 
@@ -203,35 +196,29 @@ All 265 tests should pass. The rules database validation test (`test_rules_db.py
 src/
   airac.py                  AIRAC cycle date arithmetic
   config.py                 Config loader (config.yaml + config.local.yaml merge)
-  cli.py                    Click entry point (fetch / archive commands)
-  __main__.py               python -m src entry point
+  cli.py                    Click entry point (`fetch` command)
+  __main__.py               `python -m src` entry point
   sources/
     eaip_html.py            NATS AIP HTML fetcher
+    irish_eaip_pdf.py       Irish ENR 4.4 PDF fetcher
     nats_srd.py             NATS SRD Excel fetcher
     vatsim_sct.py           VATSIM UK SCT fetcher
   processing/
-    excel_to_csv.py         SRD Excel → CSV converter and validator
+    excel_to_csv.py         SRD Excel to CSV converter and validator
     zip_handler.py          Shared HTTP zip downloader
   workspace/
     directory_manager.py    Cycle directory creation and in.json copy-forward
-  archive/
-    archiver.py             Zip creation, manifest writing, git staging
 tests/
-  test_airac.py             (29 tests)
-  test_config.py            (22 tests)
-  test_directory_manager.py (19 tests)
-  test_eaip_html.py         (25 tests)
-  test_nats_srd.py          (22 tests)
-  test_vatsim_sct.py        (35 tests)
-  test_excel_to_csv.py      (28 tests)
-  test_archiver.py          (45 tests)
-  test_cli.py               (38 tests)
-  test_rules_db.py          (2 tests — skips if vFPC-Rules-Database not present)
+  test_airac.py
+  test_config.py
+  test_directory_manager.py
+  test_eaip_html.py
+  test_nats_srd.py
+  test_vatsim_sct.py
+  test_excel_to_csv.py
+  test_cli.py
+  test_rules_db.py
 config.yaml                 Default configuration (safe to commit)
 config.local.yaml           Machine-specific overrides (gitignored)
 requirements.txt            Python dependencies
 ```
-
-### Adding a new AIRAC rule
-
-If code is added that depends on a NATS/ICAO/CAA publishing convention, tag it with `[RULE:NAME]` and register it in `vFPC-Rules-Database/Documentation/rules_reference.md`. See the [convention document](https://github.com/VFPC/vFPC-Rules-Database/blob/main/Documentation/convention.md) for the full process. The `test_rules_db.py` test will catch any unregistered tags.
