@@ -28,7 +28,7 @@ After `fetch` completes:
 | [VFPC/AIP-Parser](https://github.com/VFPC/AIP-Parser) | Reads the fetched eAIP HTML files |
 | [VFPC/airac-archiver](https://github.com/VFPC/airac-archiver) | Copies allowlisted flat files into `airac-data` and stages them for review |
 | [VFPC/airac-data](https://github.com/VFPC/airac-data) | Long-term archive of prepared cycle files |
-| [VFPC/vFPC-Rules-Database](https://github.com/VFPC/vFPC-Rules-Database) | Traceability index for aviation rules used in this tool |
+| [VFPC/vFPC-Hub](https://github.com/VFPC/vFPC-Hub) | Shared project hub, rules reference, and Butler coordination |
 
 ---
 
@@ -188,7 +188,7 @@ All errors print a human-readable message and exit with a non-zero code. Common 
 python -m pytest
 ```
 
-The rules database validation test (`test_rules_db.py`) skips gracefully if `vFPC-Rules-Database` is not cloned as a sibling of this repo.
+The rules database validation test (`test_rules_db.py`) skips gracefully if neither `vFPC-Hub` nor the legacy `vFPC-Rules-Database` repo is cloned as a sibling of this repo.
 
 ### Project structure
 
