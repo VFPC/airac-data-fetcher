@@ -46,8 +46,10 @@ ENR33_NAME = "EG-ENR-3.3-en-GB.html"
 ENR41_NAME = "EG-ENR-4.1-en-GB.html"
 ENR42_NAME = "EG-ENR-4.2-en-GB.html"
 ENR44_NAME = "EG-ENR-4.4-en-GB.html"
+ENR51_NAME = "EG-ENR-5.1-en-GB.html"
+ENR52_NAME = "EG-ENR-5.2-en-GB.html"
 
-ALL_REQUIRED = {ENR32_NAME, ENR33_NAME, ENR41_NAME, ENR42_NAME, ENR44_NAME}
+ALL_REQUIRED = {ENR32_NAME, ENR33_NAME, ENR41_NAME, ENR42_NAME, ENR44_NAME, ENR51_NAME, ENR52_NAME}
 
 EGEL_AD2_NAME = "EG-AD-2.EGEL-en-GB.html"
 EGLL_AD2_NAME = "EG-AD-2.EGLL-en-GB.html"
@@ -191,6 +193,8 @@ class TestExtractTargets:
             ENR41_NAME: content41,
             ENR42_NAME: b"<html>enr42</html>",
             ENR44_NAME: b"<html>enr44</html>",
+            ENR51_NAME: b"<html>enr51</html>",
+            ENR52_NAME: b"<html>enr52</html>",
         })
         result = _extract_targets(buf, tmp_path)
         assert set(result.keys()) == ALL_REQUIRED
@@ -211,6 +215,8 @@ class TestExtractTargets:
             f"eAIP/{ENR41_NAME}": b"41",
             f"eAIP/{ENR42_NAME}": b"42",
             f"eAIP/{ENR44_NAME}": b"44",
+            f"eAIP/{ENR51_NAME}": b"51",
+            f"eAIP/{ENR52_NAME}": b"52",
         })
         result = _extract_targets(buf, tmp_path)
         assert set(result.keys()) == ALL_REQUIRED

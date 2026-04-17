@@ -18,6 +18,8 @@ Required files (error if missing):
   - EG-ENR-4.1-en-GB.html
   - EG-ENR-4.2-en-GB.html
   - EG-ENR-4.4-en-GB.html
+  - EG-ENR-5.1-en-GB.html
+  - EG-ENR-5.2-en-GB.html
 
 Pattern-matched files (warning if none found, not an error):
   - EG-AD-2.XXXX-en-GB.html  (one per UK aerodrome, extracted to ad2/ subdir)
@@ -60,6 +62,8 @@ _TARGET_BASENAMES = frozenset([
     "EG-ENR-4.1-en-GB.html",
     "EG-ENR-4.2-en-GB.html",
     "EG-ENR-4.4-en-GB.html",  # [RULE:EAIP-ENR44-UK] UK significant points — feeds enr44_points.json
+    "EG-ENR-5.1-en-GB.html",  # [RULE:EAIP-ENR51-UK] Prohibited/restricted/danger areas — feeds aip_restricted_areas.json
+    "EG-ENR-5.2-en-GB.html",  # [RULE:EAIP-ENR52-UK] Military exercise and training areas — feeds aip_restricted_areas.json
 ])
 
 # AD 2.2 aerodrome pages: extracted by pattern (one file per UK aerodrome).
