@@ -57,6 +57,8 @@ _LINK_TEXT = "Offline HTML Download"  # exact anchor text to match
 
 # Required files: error if any are missing from the zip (matched by basename)
 _TARGET_BASENAMES = frozenset([
+    "EG-ENR-2.1-en-GB.html",  # ATS airspace (FIR, UIR, TMA, CTA, CTR) — feeds aip_airspaces.json
+    "EG-ENR-2.2-en-GB.html",  # Other regulated airspace (ATZ, MATZ, etc.) — feeds aip_airspaces.json
     "EG-ENR-3.2-en-GB.html",
     "EG-ENR-3.3-en-GB.html",
     "EG-ENR-4.1-en-GB.html",

@@ -41,6 +41,8 @@ CYCLE_2602 = AiracCycle(
 
 _BASE_URL = "https://nats-uk.ead-it.com/cms-nats/opencms/en/Publication/AIP/"
 
+ENR21_NAME = "EG-ENR-2.1-en-GB.html"
+ENR22_NAME = "EG-ENR-2.2-en-GB.html"
 ENR32_NAME = "EG-ENR-3.2-en-GB.html"
 ENR33_NAME = "EG-ENR-3.3-en-GB.html"
 ENR41_NAME = "EG-ENR-4.1-en-GB.html"
@@ -49,7 +51,7 @@ ENR44_NAME = "EG-ENR-4.4-en-GB.html"
 ENR51_NAME = "EG-ENR-5.1-en-GB.html"
 ENR52_NAME = "EG-ENR-5.2-en-GB.html"
 
-ALL_REQUIRED = {ENR32_NAME, ENR33_NAME, ENR41_NAME, ENR42_NAME, ENR44_NAME, ENR51_NAME, ENR52_NAME}
+ALL_REQUIRED = {ENR21_NAME, ENR22_NAME, ENR32_NAME, ENR33_NAME, ENR41_NAME, ENR42_NAME, ENR44_NAME, ENR51_NAME, ENR52_NAME}
 
 EGEL_AD2_NAME = "EG-AD-2.EGEL-en-GB.html"
 EGLL_AD2_NAME = "EG-AD-2.EGLL-en-GB.html"
@@ -188,6 +190,8 @@ class TestExtractTargets:
         content32 = b"<html>enr32</html>"
         content41 = b"<html>enr41</html>"
         buf = _make_zip({
+            ENR21_NAME: b"<html>enr21</html>",
+            ENR22_NAME: b"<html>enr22</html>",
             ENR32_NAME: content32,
             ENR33_NAME: b"<html>enr33</html>",
             ENR41_NAME: content41,
@@ -210,6 +214,8 @@ class TestExtractTargets:
     def test_located_by_basename_in_nested_path(self, tmp_path):
         """Files nested inside zip subdirectories are still found."""
         buf = _make_zip({
+            f"eAIP/{ENR21_NAME}": b"21",
+            f"eAIP/{ENR22_NAME}": b"22",
             f"deep/nested/path/{ENR32_NAME}": b"32",
             f"another/level/{ENR33_NAME}": b"33",
             f"eAIP/{ENR41_NAME}": b"41",
@@ -232,10 +238,10 @@ class TestExtractTargets:
             _extract_targets(buf, tmp_path)
 
     def test_extra_files_in_zip_are_ignored(self, tmp_path):
-        buf = _make_required_zip({"EG-ENR-2.1-en-GB.html": b"ignore me"})
+        buf = _make_required_zip({"EG-ENR-6.1-en-GB.html": b"ignore me"})
         result = _extract_targets(buf, tmp_path)
         assert set(result.keys()) == ALL_REQUIRED
-        assert not (tmp_path / "EG-ENR-2.1-en-GB.html").exists()
+        assert not (tmp_path / "EG-ENR-6.1-en-GB.html").exists()
 
     def test_no_partial_files_on_missing_target(self, tmp_path):
         """When one target is missing, others must NOT be left in dest_dir."""
