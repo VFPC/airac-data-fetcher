@@ -78,7 +78,7 @@ sources:
       - "EG-ENR-4.2-en-GB.html"
       - "EG-ENR-4.4-en-GB.html"
   irish_eaip:
-    html_base_url: "https://..."  # AirNav Ireland eAIP HTML cycle base
+    html_base_url: "https://..."  # AirNav Ireland AIRAC portal base
     page_url:    "https://..."  # AirNav Ireland IAIP package page
   french_eaip:
     base_url:    "https://..."  # SIA France eAIP DVD base
@@ -173,7 +173,7 @@ The GitHub releases API for `VATSIM-UK/uk-controller-pack` is queried. The most 
 
 ### Foreign ENR 4.4 support files
 
-Irish and French ENR 4.4 HTML files are fetched from deterministic cycle paths based on the AIRAC effective date. They support FIR-boundary and foreign-FRA evidence work downstream. These fetches are non-fatal because the foreign AIP pages can lag during cycle turnover. [`RULE:IRISH-EAIP-ENR44-HTML-URL`] [`RULE:FRENCH-EAIP-ENR44-HTML-URL`]
+Irish and French ENR 4.4 HTML files are fetched only after the provider's publication page exposes the target AIRAC cycle. AirNav Ireland is discovered from its AIRAC portal; SIA France is discovered from its eAIP product listing before the ENR 4.4 HTML path is derived. This prevents rehearsal runs for a future AIRAC from accidentally pulling the current cycle's foreign data. These fetches are non-fatal because the foreign AIP pages can lag during cycle turnover. [`RULE:IRISH-EAIP-ENR44-HTML-URL`] [`RULE:FRENCH-EAIP-ENR44-HTML-URL`]
 
 ---
 
