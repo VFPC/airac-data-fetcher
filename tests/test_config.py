@@ -24,6 +24,11 @@ sources:
     files:
       - EG-ENR-3.2-en-GB.html
       - EG-ENR-3.3-en-GB.html
+  irish_eaip:
+    page_url: ""
+    html_base_url: ""
+  french_eaip:
+    base_url: ""
 """
 
 
@@ -62,6 +67,8 @@ class TestLoad:
         assert cfg.sources.nats_srd.page_url == ""
         assert cfg.sources.vatsim_sct.url == ""
         assert cfg.sources.eaip.page_url == ""
+        assert cfg.sources.irish_eaip.html_base_url == ""
+        assert cfg.sources.french_eaip.base_url == ""
 
     def test_file_not_found_raises(self, tmp_path):
         with pytest.raises(ConfigError, match="not found"):

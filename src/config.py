@@ -40,6 +40,12 @@ class EaipConfig:
 @dataclass(frozen=True)
 class IrishEaipConfig:
     page_url: str
+    html_base_url: str = ""
+
+
+@dataclass(frozen=True)
+class FrenchEaipConfig:
+    base_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -48,6 +54,7 @@ class SourcesConfig:
     vatsim_sct: VatsimSctConfig
     eaip: EaipConfig
     irish_eaip: IrishEaipConfig
+    french_eaip: FrenchEaipConfig
 
 
 @dataclass(frozen=True)
@@ -108,6 +115,12 @@ def _parse(raw: dict) -> Config:
     irish = src.get("irish_eaip") or {}
     irish_eaip_cfg = IrishEaipConfig(
         page_url=irish.get("page_url") or "",
+        html_base_url=irish.get("html_base_url") or "",
+    )
+
+    french = src.get("french_eaip") or {}
+    french_eaip_cfg = FrenchEaipConfig(
+        base_url=french.get("base_url") or "",
     )
 
     return Config(
@@ -117,6 +130,7 @@ def _parse(raw: dict) -> Config:
             vatsim_sct=vatsim_sct,
             eaip=eaip_cfg,
             irish_eaip=irish_eaip_cfg,
+            french_eaip=french_eaip_cfg,
         ),
     )
 
