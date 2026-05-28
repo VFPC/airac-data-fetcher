@@ -13,6 +13,8 @@ containing all eAIP pages for that cycle.
 Once the zip is downloaded:
 
 Required files (error if missing):
+  - EG-ENR-2.1-en-GB.html
+  - EG-ENR-2.2-en-GB.html
   - EG-ENR-3.2-en-GB.html
   - EG-ENR-3.3-en-GB.html
   - EG-ENR-4.1-en-GB.html
@@ -57,8 +59,8 @@ _LINK_TEXT = "Offline HTML Download"  # exact anchor text to match
 
 # Required files: error if any are missing from the zip (matched by basename)
 _TARGET_BASENAMES = frozenset([
-    "EG-ENR-2.1-en-GB.html",  # ATS airspace (FIR, UIR, TMA, CTA, CTR) — feeds aip_airspaces.json
-    "EG-ENR-2.2-en-GB.html",  # Other regulated airspace (ATZ, MATZ, etc.) — feeds aip_airspaces.json
+    "EG-ENR-2.1-en-GB.html",  # [RULE:EAIP-ENR21-UK] ATS airspace (FIR, UIR, TMA, CTA, CTR) — feeds aip_airspaces.json
+    "EG-ENR-2.2-en-GB.html",  # [RULE:EAIP-ENR22-UK] Other regulated airspace (ATZ, MATZ, etc.) — feeds aip_airspaces.json
     "EG-ENR-3.2-en-GB.html",
     "EG-ENR-3.3-en-GB.html",
     "EG-ENR-4.1-en-GB.html",
@@ -374,8 +376,8 @@ def fetch_eaip_html(
 ) -> dict[str, Path]:
     """Download and extract eAIP HTML files for *cycle*.
 
-    Extracts five required ENR files (ENR 3.2, 3.3, 4.1, 4.2, 4.4) plus all
-    AD 2.2 aerodrome pages found in the zip.
+    Extracts all required ENR files listed in _TARGET_BASENAMES plus all AD 2.2
+    aerodrome pages found in the zip.
 
     Args:
         cycle:         The target AIRAC cycle.
