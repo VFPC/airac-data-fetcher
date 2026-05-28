@@ -12,7 +12,15 @@ from click.testing import CliRunner
 
 from src.airac import cycle_for_date
 from src.cli import _resolve_cycle, cli
-from src.config import Config, EaipConfig, IrishEaipConfig, NatsSrdConfig, SourcesConfig, VatsimSctConfig
+from src.config import (
+    Config,
+    EaipConfig,
+    FrenchEaipConfig,
+    IrishEaipConfig,
+    NatsSrdConfig,
+    SourcesConfig,
+    VatsimSctConfig,
+)
 from src.processing.excel_to_csv import ExcelValidationError
 from src.sources.eaip_html import EaipFetchError
 from src.sources.nats_srd import SrdFetchError
@@ -46,6 +54,7 @@ def _make_config(tmp_path: Path) -> Config:
             vatsim_sct=VatsimSctConfig(url=""),
             eaip=EaipConfig(page_url="", files=()),
             irish_eaip=IrishEaipConfig(page_url=""),
+            french_eaip=FrenchEaipConfig(base_url=""),
         ),
     )
 
@@ -111,6 +120,8 @@ class TestFetchCommand:
             patch("src.cli.fetch_srd", return_value={"SRD.xlsx": excel_path}),
             patch("src.cli.convert_srd_excel", return_value={"Routes": Path("Routes.csv"), "Notes": Path("Notes.csv")}),
             patch("src.cli.fetch_sct", return_value=Path("UK_2026_03.sct")),
+            patch("src.cli.fetch_irish_enr44_html", return_value=Path("EI-ENR-4.4-en-IE.html")),
+            patch("src.cli.fetch_french_enr44_html", return_value=Path("FR-ENR-4.4-fr-FR.html")),
             patch("src.cli.fetch_irish_enr44", return_value=Path("EI_ENR_4_4_EN.pdf")),
         ):
             return runner.invoke(cli, ["fetch", "--cycle", "2603"] + (args or []))
@@ -215,6 +226,9 @@ class TestFetchCommand:
             patch("src.cli.fetch_srd", return_value={"SRD.xlsx": excel_path}),
             patch("src.cli.convert_srd_excel", return_value={}),
             patch("src.cli.fetch_sct", return_value=Path("UK_2026_03.sct")),
+            patch("src.cli.fetch_irish_enr44_html", return_value=None),
+            patch("src.cli.fetch_french_enr44_html", return_value=None),
+            patch("src.cli.fetch_irish_enr44", return_value=None),
         ):
             result = runner.invoke(cli, ["fetch", "--cycle", "2603"])
         assert "copied" in result.output
@@ -236,6 +250,9 @@ class TestFetchCommand:
             patch("src.cli.fetch_srd", return_value={"SRD.xlsx": excel_path}),
             patch("src.cli.convert_srd_excel", return_value={}),
             patch("src.cli.fetch_sct", return_value=Path("UK_2026_03.sct")),
+            patch("src.cli.fetch_irish_enr44_html", return_value=None),
+            patch("src.cli.fetch_french_enr44_html", return_value=None),
+            patch("src.cli.fetch_irish_enr44", return_value=None),
         ):
             result = runner.invoke(cli, ["fetch"])
         assert "2603" in result.output
@@ -249,6 +266,7 @@ class TestFetchCommand:
                 vatsim_sct=VatsimSctConfig(url=""),
                 eaip=EaipConfig(page_url="https://custom.url/aip", files=()),
                 irish_eaip=IrishEaipConfig(page_url=""),
+                french_eaip=FrenchEaipConfig(base_url=""),
             ),
         )
         runner = CliRunner()
@@ -261,6 +279,8 @@ class TestFetchCommand:
             patch("src.cli.fetch_srd", return_value={"SRD.xlsx": excel_path}),
             patch("src.cli.convert_srd_excel", return_value={}),
             patch("src.cli.fetch_sct", return_value=Path("UK_2026_03.sct")),
+            patch("src.cli.fetch_irish_enr44_html", return_value=None),
+            patch("src.cli.fetch_french_enr44_html", return_value=None),
             patch("src.cli.fetch_irish_enr44", return_value=None),
         ):
             runner.invoke(cli, ["fetch", "--cycle", "2603"])
@@ -279,10 +299,51 @@ class TestFetchCommand:
             patch("src.cli.fetch_srd", return_value={"SRD.xlsx": excel_path}),
             patch("src.cli.convert_srd_excel", return_value={}),
             patch("src.cli.fetch_sct", return_value=Path("UK_2026_03.sct")),
+            patch("src.cli.fetch_irish_enr44_html", return_value=None),
+            patch("src.cli.fetch_french_enr44_html", return_value=None),
+            patch("src.cli.fetch_irish_enr44", return_value=None),
         ):
             runner.invoke(cli, ["fetch", "--cycle", "2603"])
         _, kwargs = mock_eaip.call_args
         assert "index_url" not in kwargs
+
+    def test_foreign_enr44_base_urls_from_config_passed_through(self, tmp_path):
+        cfg = _make_config(tmp_path)
+        cfg = Config(
+            workspace_base=cfg.workspace_base,
+            sources=SourcesConfig(
+                nats_srd=NatsSrdConfig(page_url="", sheet_name="Routes", notes_sheet="Notes"),
+                vatsim_sct=VatsimSctConfig(url=""),
+                eaip=EaipConfig(page_url="", files=()),
+                irish_eaip=IrishEaipConfig(
+                    page_url="",
+                    html_base_url="https://irish.example/AIRAC",
+                ),
+                french_eaip=FrenchEaipConfig(
+                    base_url="https://french.example/media/dvd",
+                ),
+            ),
+        )
+        runner = CliRunner()
+        excel_path = tmp_path / "SRD.xlsx"
+        with (
+            patch("src.cli.load", return_value=cfg),
+            patch("src.cli.ensure_cycle_dir"),
+            patch("src.cli.copy_in_json_forward", return_value=None),
+            patch("src.cli.fetch_eaip_html", return_value={}),
+            patch("src.cli.fetch_srd", return_value={"SRD.xlsx": excel_path}),
+            patch("src.cli.convert_srd_excel", return_value={}),
+            patch("src.cli.fetch_sct", return_value=Path("UK_2026_03.sct")),
+            patch("src.cli.fetch_irish_enr44_html", return_value=None) as mock_irish,
+            patch("src.cli.fetch_french_enr44_html", return_value=None) as mock_french,
+            patch("src.cli.fetch_irish_enr44", return_value=None),
+        ):
+            runner.invoke(cli, ["fetch", "--cycle", "2603"])
+
+        _, irish_kwargs = mock_irish.call_args
+        _, french_kwargs = mock_french.call_args
+        assert irish_kwargs.get("base_url") == "https://irish.example/AIRAC"
+        assert french_kwargs.get("base_url") == "https://french.example/media/dvd"
 
     def test_log_file_created_on_success(self, tmp_path):
         result = self._invoke(tmp_path)

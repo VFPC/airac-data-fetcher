@@ -36,8 +36,17 @@ sources:
       - "EG-ENR-4.2-en-GB.html"
       - "EG-ENR-4.4-en-GB.html"
   irish_eaip:
+    # AirNav Ireland cycle eAIP HTML directory. ENR 4.4 is fetched as:
+    # {html_base_url}/{YYYY-MM-DD}-AIRAC/html/eAIP/EI-ENR-4.4-en-IE.html
+    # [RULE:IRISH-EAIP-ENR44-HTML-URL]
+    html_base_url: "https://www.airnav.ie/AIRAC"
     # AirNav Ireland IAIP package page. ENR 4.4 PDF link is scraped from here
     # each cycle — the GUID in the download URL changes when AirNav updates the
     # document. Override if the page URL moves. [RULE:IRISH-EAIP-ENR44-URL]
     # Confirmed working 2026-03-31.
     page_url: "https://www.airnav.ie/air-traffic-management/aeronautical-information-management/aip-package"
+  french_eaip:
+    # SIA France eAIP DVD base. ENR 4.4 is fetched as:
+    # {base_url}/eAIP_DD_MMM_YYYY/FRANCE/AIRAC-YYYY-MM-DD/html/eAIP/FR-ENR-4.4-fr-FR.html
+    # [RULE:FRENCH-EAIP-ENR44-HTML-URL]
+    base_url: "https://www.sia.aviation-civile.gouv.fr/media/dvd"

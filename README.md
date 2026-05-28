@@ -13,7 +13,8 @@ For a given AIRAC cycle, the tool:
 3. Downloads the UK eAIP HTML files needed by downstream tools
 4. Downloads the NATS SRD workbook and converts it to `Routes.csv` and `Notes.csv`
 5. Downloads the VATSIM UK sector file (`.sct`)
-6. Attempts to fetch the Irish ENR 4.4 PDF as a non-fatal support input
+6. Attempts to fetch Irish and French ENR 4.4 HTML as non-fatal support inputs
+7. Attempts to fetch the Irish ENR 4.4 PDF as a non-fatal support input
 
 After `fetch` completes:
 
@@ -77,7 +78,10 @@ sources:
       - "EG-ENR-4.2-en-GB.html"
       - "EG-ENR-4.4-en-GB.html"
   irish_eaip:
+    html_base_url: "https://..."  # AirNav Ireland eAIP HTML cycle base
     page_url:    "https://..."  # AirNav Ireland IAIP package page
+  french_eaip:
+    base_url:    "https://..."  # SIA France eAIP DVD base
 ```
 
 ---
@@ -118,6 +122,8 @@ python -m src fetch
 | `UK_YYYY_NN.sct` | VATSIM-UK uk-controller-pack release |
 | `Routes.csv` | Converted from the NATS SRD Excel workbook |
 | `Notes.csv` | Converted from the NATS SRD Excel workbook |
+| `EI-ENR-4.4-en-IE.html` | AirNav Ireland eAIP cycle HTML fetch, when available |
+| `FR-ENR-4.4-fr-FR.html` | SIA France eAIP cycle HTML fetch, when available |
 | `EI_ENR_4_4_EN.pdf` | Irish IAIP package page fetch, when available |
 
 ---
@@ -165,6 +171,10 @@ After download, the "What's New" sheet header is read and the embedded date is v
 
 The GitHub releases API for `VATSIM-UK/uk-controller-pack` is queried. The most recently published release whose tag matches `{YYYY}_{NN}[a-z]*` is selected (latest patch letter wins). The `.sct` file is extracted from `UK/data/UK_{YYYY}_{NN}.sct` inside the source archive. [`RULE:SCT-RELEASE-TAG`] [`RULE:SCT-FILE-PATH`]
 
+### Foreign ENR 4.4 support files
+
+Irish and French ENR 4.4 HTML files are fetched from deterministic cycle paths based on the AIRAC effective date. They support FIR-boundary and foreign-FRA evidence work downstream. These fetches are non-fatal because the foreign AIP pages can lag during cycle turnover. [`RULE:IRISH-EAIP-ENR44-HTML-URL`] [`RULE:FRENCH-EAIP-ENR44-HTML-URL`]
+
 ---
 
 ## Error messages
@@ -200,6 +210,7 @@ src/
   __main__.py               `python -m src` entry point
   sources/
     eaip_html.py            NATS AIP HTML fetcher
+    foreign_enr44_html.py   Irish/French ENR 4.4 HTML support-file fetcher
     irish_eaip_pdf.py       Irish ENR 4.4 PDF fetcher
     nats_srd.py             NATS SRD Excel fetcher
     vatsim_sct.py           VATSIM UK SCT fetcher

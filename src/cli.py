@@ -18,7 +18,8 @@ fetch
     4. Fetch the SRD Excel zip from NATS and extract the .xlsx file.
     5. Validate and convert the SRD Excel to Routes.csv and Notes.csv.
     6. Fetch the VATSIM UK sector file (.sct) from the uk-controller-pack release.
-    7. Fetch EI_ENR_4_4_EN.pdf from the AirNav Ireland IAIP package page (non-fatal).
+    7. Fetch Irish and French ENR 4.4 HTML support files (non-fatal).
+    8. Fetch EI_ENR_4_4_EN.pdf from the AirNav Ireland IAIP package page (non-fatal).
 
 After fetching, run the SRD Parser to produce out.json, then use the
 airac-archiver tool to package and stage the files: https://github.com/VFPC/airac-archiver
@@ -38,6 +39,10 @@ from src.airac import AiracCycle, current_cycle, cycle_for_date
 from src.config import ConfigError, load
 from src.processing.excel_to_csv import ExcelValidationError, convert_srd_excel
 from src.sources.eaip_html import EaipFetchError, fetch_eaip_html
+from src.sources.foreign_enr44_html import (
+    fetch_french_enr44_html,
+    fetch_irish_enr44_html,
+)
 from src.sources.irish_eaip_pdf import fetch_irish_enr44
 from src.sources.nats_srd import SrdFetchError, fetch_srd
 from src.sources.vatsim_sct import SctFetchError, fetch_sct
@@ -172,7 +177,7 @@ def fetch(cycle: str | None) -> None:
     click.echo(f"\nCycle:     {target}")
     click.echo(f"Directory: {work_dir}\n")
 
-    total = 7
+    total = 8
 
     # Step 1 — working directory
     _step(1, total, "Creating working directory")
@@ -232,8 +237,27 @@ def fetch(cycle: str | None) -> None:
     except SctFetchError as exc:
         _abort(str(exc))
 
-    # Step 7 — Irish ENR 4.4 PDF (non-fatal: warns and continues if unavailable)
-    _step(7, total, "Fetching Irish eAIP ENR 4.4 PDF (EI_ENR_4_4_EN.pdf)")
+    # Step 7 — foreign ENR 4.4 HTML (non-fatal: warns and continues if unavailable)
+    _step(7, total, "Fetching Irish/French ENR 4.4 HTML")
+    kwargs_irish_html: dict = {}
+    if cfg.sources.irish_eaip.html_base_url:
+        kwargs_irish_html["base_url"] = cfg.sources.irish_eaip.html_base_url
+    kwargs_french_html: dict = {}
+    if cfg.sources.french_eaip.base_url:
+        kwargs_french_html["base_url"] = cfg.sources.french_eaip.base_url
+
+    irish_html = fetch_irish_enr44_html(target, work_dir, **kwargs_irish_html)
+    french_html = fetch_french_enr44_html(target, work_dir, **kwargs_french_html)
+    html_names = [p.name for p in (irish_html, french_html) if p]
+    if html_names:
+        _ok(", ".join(html_names))
+        cli_logger.info("Foreign ENR 4.4 HTML files written: %s", ", ".join(html_names))
+    else:
+        click.echo(" skipped (unavailable - see log for details)")
+        cli_logger.warning("Foreign ENR 4.4 HTML fetches skipped - check log for details")
+
+    # Step 8 — Irish ENR 4.4 PDF (non-fatal: warns and continues if unavailable)
+    _step(8, total, "Fetching Irish eAIP ENR 4.4 PDF (EI_ENR_4_4_EN.pdf)")
     kwargs_ie: dict = {}
     if cfg.sources.irish_eaip.page_url:
         kwargs_ie["page_url"] = cfg.sources.irish_eaip.page_url
