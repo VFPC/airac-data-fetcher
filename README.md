@@ -15,6 +15,7 @@ For a given AIRAC cycle, the tool:
 5. Downloads the VATSIM UK sector file (`.sct`)
 6. Attempts to fetch Irish and French ENR 4.4 HTML as non-fatal support inputs
 7. Attempts to fetch the Irish ENR 4.4 PDF as a non-fatal support input
+8. Downloads the EUROCONTROL RAD workbook
 
 After `fetch` completes:
 
@@ -125,6 +126,7 @@ python -m src fetch
 | `EI-ENR-4.4-en-IE.html` | AirNav Ireland eAIP cycle HTML fetch, when available |
 | `FR-ENR-4.4-fr-FR.html` | SIA France eAIP cycle HTML fetch, when available |
 | `EI_ENR_4_4_EN.pdf` | Irish IAIP package page fetch, when available |
+| `RAD_YYNN_vM_N.xlsx` | EUROCONTROL RAD workbook discovered from the RAD index page |
 
 ---
 
@@ -175,6 +177,10 @@ The GitHub releases API for `VATSIM-UK/uk-controller-pack` is queried. The most 
 
 Irish and French ENR 4.4 HTML files are fetched only after the provider's publication page exposes the target AIRAC cycle. AirNav Ireland is discovered from its AIRAC portal; SIA France is discovered from its eAIP product listing before the ENR 4.4 HTML path is derived. This prevents rehearsal runs for a future AIRAC from accidentally pulling the current cycle's foreign data. These fetches are non-fatal because the foreign AIP pages can lag during cycle turnover. [`RULE:IRISH-EAIP-ENR44-HTML-URL`] [`RULE:FRENCH-EAIP-ENR44-HTML-URL`]
 
+### EUROCONTROL RAD workbook
+
+The EUROCONTROL RAD index page lists workbook links such as `assets/AIRAC-RAD_DATA/CURRENT_AIRAC/RAD_2606_v1_12.xlsx`. The fetcher scrapes the index, selects the highest version for the requested cycle, and downloads the workbook directly into the cycle working directory. This step is fatal because the RAD workbook is a required AIRAC source artifact for RAD rollover work. [`RULE:RAD-DOWNLOAD-URL`]
+
 ---
 
 ## Error messages
@@ -213,6 +219,7 @@ src/
     foreign_enr44_html.py   Irish/French ENR 4.4 HTML support-file fetcher
     irish_eaip_pdf.py       Irish ENR 4.4 PDF fetcher
     nats_srd.py             NATS SRD Excel fetcher
+    nats_rad.py             EUROCONTROL RAD workbook fetcher
     vatsim_sct.py           VATSIM UK SCT fetcher
   processing/
     excel_to_csv.py         SRD Excel to CSV converter and validator

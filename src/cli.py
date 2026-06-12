@@ -20,6 +20,7 @@ fetch
     6. Fetch the VATSIM UK sector file (.sct) from the uk-controller-pack release.
     7. Fetch Irish and French ENR 4.4 HTML support files (non-fatal).
     8. Fetch EI_ENR_4_4_EN.pdf from the AirNav Ireland IAIP package page (non-fatal).
+    9. Fetch the EUROCONTROL RAD Excel workbook from nm.eurocontrol.int.
 
 After fetching, run the SRD Parser to produce out.json, then use the
 airac-archiver tool to package and stage the files: https://github.com/VFPC/airac-archiver
@@ -44,6 +45,7 @@ from src.sources.foreign_enr44_html import (
     fetch_irish_enr44_html,
 )
 from src.sources.irish_eaip_pdf import fetch_irish_enr44
+from src.sources.nats_rad import RadFetchError, fetch_rad
 from src.sources.nats_srd import SrdFetchError, fetch_srd
 from src.sources.vatsim_sct import SctFetchError, fetch_sct
 from src.workspace.directory_manager import (
@@ -177,7 +179,7 @@ def fetch(cycle: str | None) -> None:
     click.echo(f"\nCycle:     {target}")
     click.echo(f"Directory: {work_dir}\n")
 
-    total = 8
+    total = 9
 
     # Step 1 — working directory
     _step(1, total, "Creating working directory")
@@ -268,6 +270,15 @@ def fetch(cycle: str | None) -> None:
     else:
         click.echo(" skipped (unavailable — see log for details)")
         cli_logger.warning("EI_ENR_4_4_EN.pdf fetch skipped — check log for details")
+
+    # Step 9 — EUROCONTROL RAD workbook
+    _step(9, total, "Fetching EUROCONTROL RAD workbook")
+    try:
+        rad_path = fetch_rad(target, work_dir)
+        _ok(rad_path.name)
+        cli_logger.info("RAD workbook written to %s", rad_path)
+    except RadFetchError as exc:
+        _abort(str(exc))
 
     cli_logger.info("=== All files ready — run complete ===")
 

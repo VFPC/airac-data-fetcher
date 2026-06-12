@@ -23,6 +23,7 @@ from src.config import (
 )
 from src.processing.excel_to_csv import ExcelValidationError
 from src.sources.eaip_html import EaipFetchError
+from src.sources.nats_rad import RadFetchError
 from src.sources.nats_srd import SrdFetchError
 from src.sources.vatsim_sct import SctFetchError
 
@@ -123,6 +124,7 @@ class TestFetchCommand:
             patch("src.cli.fetch_irish_enr44_html", return_value=Path("EI-ENR-4.4-en-IE.html")),
             patch("src.cli.fetch_french_enr44_html", return_value=Path("FR-ENR-4.4-fr-FR.html")),
             patch("src.cli.fetch_irish_enr44", return_value=Path("EI_ENR_4_4_EN.pdf")),
+            patch("src.cli.fetch_rad", return_value=Path("RAD_2603_v1_12.xlsx")),
         ):
             return runner.invoke(cli, ["fetch", "--cycle", "2603"] + (args or []))
 
@@ -214,6 +216,26 @@ class TestFetchCommand:
             result = runner.invoke(cli, ["fetch", "--cycle", "2603"])
         assert result.exit_code != 0
 
+    def test_rad_error_exits_nonzero(self, tmp_path):
+        cfg = _make_config(tmp_path)
+        runner = CliRunner()
+        excel_path = tmp_path / "SRD.xlsx"
+        with (
+            patch("src.cli.load", return_value=cfg),
+            patch("src.cli.ensure_cycle_dir"),
+            patch("src.cli.copy_in_json_forward", return_value=None),
+            patch("src.cli.fetch_eaip_html", return_value={}),
+            patch("src.cli.fetch_srd", return_value={"SRD.xlsx": excel_path}),
+            patch("src.cli.convert_srd_excel", return_value={}),
+            patch("src.cli.fetch_sct", return_value=Path("UK_2026_03.sct")),
+            patch("src.cli.fetch_irish_enr44_html", return_value=None),
+            patch("src.cli.fetch_french_enr44_html", return_value=None),
+            patch("src.cli.fetch_irish_enr44", return_value=None),
+            patch("src.cli.fetch_rad", side_effect=RadFetchError("no workbook found")),
+        ):
+            result = runner.invoke(cli, ["fetch", "--cycle", "2603"])
+        assert result.exit_code != 0
+
     def test_copy_forward_done_message_when_copied(self, tmp_path):
         cfg = _make_config(tmp_path)
         runner = CliRunner()
@@ -229,6 +251,7 @@ class TestFetchCommand:
             patch("src.cli.fetch_irish_enr44_html", return_value=None),
             patch("src.cli.fetch_french_enr44_html", return_value=None),
             patch("src.cli.fetch_irish_enr44", return_value=None),
+            patch("src.cli.fetch_rad", return_value=Path("RAD_2603_v1_12.xlsx")),
         ):
             result = runner.invoke(cli, ["fetch", "--cycle", "2603"])
         assert "copied" in result.output
@@ -253,6 +276,7 @@ class TestFetchCommand:
             patch("src.cli.fetch_irish_enr44_html", return_value=None),
             patch("src.cli.fetch_french_enr44_html", return_value=None),
             patch("src.cli.fetch_irish_enr44", return_value=None),
+            patch("src.cli.fetch_rad", return_value=Path("RAD_2603_v1_12.xlsx")),
         ):
             result = runner.invoke(cli, ["fetch"])
         assert "2603" in result.output
@@ -282,6 +306,7 @@ class TestFetchCommand:
             patch("src.cli.fetch_irish_enr44_html", return_value=None),
             patch("src.cli.fetch_french_enr44_html", return_value=None),
             patch("src.cli.fetch_irish_enr44", return_value=None),
+            patch("src.cli.fetch_rad", return_value=Path("RAD_2603_v1_12.xlsx")),
         ):
             runner.invoke(cli, ["fetch", "--cycle", "2603"])
         _, kwargs = mock_eaip.call_args
@@ -302,6 +327,7 @@ class TestFetchCommand:
             patch("src.cli.fetch_irish_enr44_html", return_value=None),
             patch("src.cli.fetch_french_enr44_html", return_value=None),
             patch("src.cli.fetch_irish_enr44", return_value=None),
+            patch("src.cli.fetch_rad", return_value=Path("RAD_2603_v1_12.xlsx")),
         ):
             runner.invoke(cli, ["fetch", "--cycle", "2603"])
         _, kwargs = mock_eaip.call_args
@@ -337,6 +363,7 @@ class TestFetchCommand:
             patch("src.cli.fetch_irish_enr44_html", return_value=None) as mock_irish,
             patch("src.cli.fetch_french_enr44_html", return_value=None) as mock_french,
             patch("src.cli.fetch_irish_enr44", return_value=None),
+            patch("src.cli.fetch_rad", return_value=Path("RAD_2603_v1_12.xlsx")),
         ):
             runner.invoke(cli, ["fetch", "--cycle", "2603"])
 
