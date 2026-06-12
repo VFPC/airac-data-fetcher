@@ -44,7 +44,9 @@ logger = logging.getLogger(__name__)
 _RAD_BASE_URL = "https://www.nm.eurocontrol.int/RAD/"
 _RAD_INDEX_URL = _RAD_BASE_URL + "index.html"
 
-# Matches workbook basenames like RAD_2606_v1_12.xlsx
+# Matches workbook basenames like RAD_2606_v1_12.xlsx.
+# The end anchor intentionally requires a path-style href with no query string.
+# If EUROCONTROL adds query strings or fragments, update this regex.
 # Group 1: cycle ident (e.g. "2606")
 # Group 2: major version (e.g. "1")
 # Group 3: minor version (e.g. "12")

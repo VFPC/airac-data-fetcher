@@ -212,6 +212,31 @@ class TestFetchRad:
             with pytest.raises(RadFetchError, match="HTTP 403"):
                 fetch_rad(CYCLE_2606, tmp_path)
 
+    def test_raises_on_index_network_error(self, tmp_path):
+        def fail_urlopen(req, timeout=None):
+            raise urllib.error.URLError("DNS failure")
+
+        with patch("src.sources.nats_rad.urllib.request.urlopen", side_effect=fail_urlopen):
+            with pytest.raises(RadFetchError, match="Network error fetching RAD index"):
+                fetch_rad(CYCLE_2606, tmp_path)
+
+    def test_raises_on_download_network_error(self, tmp_path):
+        call_count = {"n": 0}
+
+        def partial_urlopen(req, timeout=None):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                class FakeIndex:
+                    def read(self): return _INDEX_HTML_2606_ONLY.encode()
+                    def __enter__(self): return self
+                    def __exit__(self, *a): pass
+                return FakeIndex()
+            raise urllib.error.URLError("connection refused")
+
+        with patch("src.sources.nats_rad.urllib.request.urlopen", side_effect=partial_urlopen):
+            with pytest.raises(RadFetchError, match="Network error downloading RAD workbook"):
+                fetch_rad(CYCLE_2606, tmp_path)
+
     def test_raises_when_cycle_not_on_page(self, tmp_path):
         urlopen = _make_fake_urlopen(_INDEX_HTML_NO_MATCH, b"")
 
