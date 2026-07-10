@@ -296,3 +296,21 @@ class TestConvertSrdExcel:
         result = convert_srd_excel(path, out, CYCLE_2602)
         for p in result.values():
             assert p.parent == out
+
+    def test_trailing_empty_columns_trimmed(self, tmp_path):
+        # Regression: inflated ws.dimensions (e.g. stray formatting far
+        # beyond real data) must not pad the CSV with empty trailing fields.
+        out = tmp_path / "out"
+        path = _make_workbook(tmp_path)
+        wb = openpyxl.load_workbook(path)
+        ws = wb[_NOTES_SHEET]
+        ws.cell(row=1, column=500, value=None)
+        ws.cell(row=1, column=500).fill = openpyxl.styles.PatternFill(
+            start_color="FFFF00", end_color="FFFF00", fill_type="solid"
+        )
+        wb.save(path)
+
+        result = convert_srd_excel(path, out, CYCLE_2602)
+        rows = list(csv.reader(result[_NOTES_SHEET].open(encoding="utf-8")))
+        assert len(rows[0]) == len(NOTES_DATA[0])
+        assert len(rows[1]) == len(NOTES_DATA[0])

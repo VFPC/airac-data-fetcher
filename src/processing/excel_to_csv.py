@@ -91,15 +91,40 @@ def _find_whats_new_date(ws) -> date | None:
     return None
 
 
+def _last_populated_column(ws) -> int:
+    """Return the count of columns up to and including the last one that
+    holds a non-empty value anywhere in *ws*.
+
+    Some workbooks report an inflated ``ws.dimensions``/``max_column`` far
+    beyond the real data extent (e.g. stray formatting applied to a large
+    range). Trusting that bound when exporting to CSV pads every row with
+    thousands of empty trailing fields, bloating file size by orders of
+    magnitude with no content gained. Scanning for the true rightmost
+    non-empty cell keeps the export trimmed to the actual data.
+    """
+    max_col = 0
+    for row in ws.iter_rows(values_only=True):
+        for idx in range(len(row) - 1, max_col - 1, -1):
+            value = row[idx]
+            if value is not None and str(value).strip() != "":
+                max_col = idx + 1
+                break
+    return max_col
+
+
 def _sheet_to_csv(ws, dest_path: Path) -> Path:
     """Write all rows from *ws* to a CSV file at *dest_path*.
 
     None values are written as empty strings so the CSV remains well-formed.
+    Rows are trimmed to the last column containing any value anywhere in the
+    sheet, discarding trailing empty columns (see `_last_populated_column`).
     """
+    max_col = _last_populated_column(ws)
     with dest_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         for row in ws.iter_rows(values_only=True):
-            writer.writerow(["" if v is None else v for v in row])
+            trimmed = row[:max_col] if max_col else row
+            writer.writerow(["" if v is None else v for v in trimmed])
     return dest_path
 
 
