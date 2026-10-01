@@ -1,13 +1,13 @@
 # AIRAC Data Fetcher — Project Status
 
-_Last updated: 2026-03-28_
+_Last updated: 2026-10-01_
 
 ---
 
 ## System Status: PRODUCTION-READY
 
 **Branch:** `main`
-**Tests:** 230 (all passing, 0 skipped)
+**Tests:** 294 (all passing, 0 skipped)
 **Dependencies:** beautifulsoup4, openpyxl, pyyaml, click, pytest
 
 ---
@@ -21,7 +21,7 @@ _Last updated: 2026-03-28_
 | `src/workspace/directory_manager.py` | 19 | Cycle dir creation; `in.json` copy-forward |
 | `src/sources/eaip_html.py` | 43 | NATS AIP scrape, zip, extract ENR 3.x/4.x + all AD 2.2 pages, date validate |
 | `src/sources/nats_srd.py` | 27 | Deterministic SRD zip URL → Excel extract |
-| `src/sources/vatsim_sct.py` | 38 | GitHub releases API → source zip → SCT extract |
+| `src/sources/vatsim_sct.py` | 43 | GitHub releases API → source zip → SCT extract (case-insensitive `UK/Data/Sector/` path match, fixed 2026-10-01) |
 | `src/processing/excel_to_csv.py` | 28 | "What's New" date validate → Routes.csv + Notes.csv |
 | `src/processing/zip_handler.py` | — | Shared HTTP downloader (covered by source tests) |
 | `src/cli.py` | 27 | Click `fetch` command; file logging to cycle dir |
@@ -71,6 +71,7 @@ workspace_base: "C:\\path\\to\\your\\vFPC files"
 | #6 | Add run logging to cycle directory | 2026-03-23 |
 
 | #12 | Fetch AD 2.2 + ENR 4.1/4.2 from eAIP zip | 2026-03-28 (PR #13) |
+| #29 | fly-fix: SCT zip lookup used wrong casing/path | 2026-10-01 (PR #28) |
 
 No open issues.
 

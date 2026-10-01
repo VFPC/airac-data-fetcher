@@ -1,6 +1,28 @@
 # AIRAC Data Fetcher — Session Status Summary
 
-_Last updated: 2026-03-28_
+_Last updated: 2026-10-01_
+
+---
+
+### Session 2026-10-01: fly-fix #29 — SCT zip casing/path mismatch (PR #28)
+
+**Scope:** airac-data-fetcher only — discovered during the AIRAC 2610 fetch
+
+**fly-fix #29 — SCT zip lookup used wrong casing/path (closed):**
+- `vatsim_sct.py`'s `_TARGET_PATH` assumed `UK/data/UK_YYYY_MM.sct`. The real
+  uk-controller-pack release layout (confirmed against the live 2026_10 zip)
+  is `UK/Data/Sector/UK_2026_10.sct` — capital `Data`, nested under an extra
+  `Sector/` folder. Pre-fix code raised `SctFetchError` against the real zip.
+- Fix: case-insensitive matching for the `UK/Data/Sector/` path, plus an
+  unambiguous-only fallback for a lagging basename directly under `UK/Data/`.
+- This likely silently affected prior cycles too (manual workaround or lucky
+  basename match) — flagged as a fly-fix rather than a plain bug since it was
+  probably wrong for more than one cycle without being noticed.
+
+**Validation:** 294 tests pass (up from 230)
+
+**Commits pushed to main:**
+- `5407b0c` — fix: handle UK/Data casing and Sector subfolder in SCT zip lookup (#28)
 
 ---
 

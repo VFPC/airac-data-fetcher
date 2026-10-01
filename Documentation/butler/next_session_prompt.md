@@ -1,6 +1,6 @@
 # AIRAC Data Fetcher — Next Session Prompt
 
-_Last updated: 2026-03-28_
+_Last updated: 2026-10-01_
 
 ---
 
@@ -16,7 +16,7 @@ The ecosystem map is at `vFPC-Hub/Documentation/ecosystem.md`.
 ## Current State
 
 **Branch:** `main` — all issues closed, no open work
-**Tests:** 230 passing, 0 skipped
+**Tests:** 294 passing, 0 skipped
 **Status:** Production-ready and in active use
 
 ---
@@ -63,7 +63,10 @@ https://github.com/VFPC/airac-archiver
 - `RULE:SRD-DOWNLOAD-URL` — deterministic SRD zip URL (`src/sources/nats_srd.py`)
 - `RULE:SRD-EXCEL-STRUCTURE` — sheet names, "What's New" header format (`src/processing/excel_to_csv.py`, `config.yaml`)
 - `RULE:SCT-RELEASE-TAG` — GitHub release tag pattern (`src/sources/vatsim_sct.py`)
-- `RULE:SCT-FILE-PATH` — SCT file location inside source zip (`src/sources/vatsim_sct.py`)
+- `RULE:SCT-FILE-PATH` — SCT file location inside source zip is `UK/Data/Sector/UK_YYYY_MM.sct`
+  (capital `Data`, nested `Sector/` folder) — matched case-insensitively since NATS has
+  changed the casing/nesting before without notice (`src/sources/vatsim_sct.py`, fixed
+  2026-10-01, PR #28 / fly-fix #29)
 
 All 6 rules registered in `vFPC-Hub/Documentation/rules_reference.md` and verified
 by `tests/test_rules_db.py`.
