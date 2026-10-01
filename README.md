@@ -171,7 +171,7 @@ After download, the "What's New" sheet header is read and the embedded date is v
 
 ### VATSIM UK sector file
 
-The GitHub releases API for `VATSIM-UK/uk-controller-pack` is queried. The most recently published release whose tag matches `{YYYY}_{NN}[a-z]*` is selected (latest patch letter wins). The `.sct` file is extracted from `UK/data/UK_{YYYY}_{NN}.sct` inside the source archive. [`RULE:SCT-RELEASE-TAG`] [`RULE:SCT-FILE-PATH`]
+The GitHub releases API for `VATSIM-UK/uk-controller-pack` is queried. The most recently published release whose tag matches `{YYYY}_{NN}[a-z]*` is selected (latest patch letter wins). The release tag is the cycle freshness check. The extracted local file is written as `UK_YYYY_NN.sct`; inside the source archive the fetcher prefers an exact basename match under `UK/Data`, but accepts one unambiguous lagging main sector file under `UK/Data/Sector` if the current release tag contains it. [`RULE:SCT-RELEASE-TAG`] [`RULE:SCT-FILE-PATH`]
 
 ### Foreign ENR 4.4 support files
 
