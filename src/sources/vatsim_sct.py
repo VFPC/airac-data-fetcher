@@ -18,9 +18,12 @@ matching the AIRAC cycle.  Examples: ``2026_02``, ``2026_02a``.
 SCT file path convention
 ------------------------
 # [RULE:SCT-FILE-PATH]
-Inside the source zip the sector file is at ``UK/data/UK_{YYYY}_{NN}.sct``.
-The file is located by matching both the ``UK/data/`` directory component and
-the exact basename ``UK_{YYYY}_{NN}.sct``.
+The GitHub release tag is authoritative for cycle freshness.  The local file is
+written as ``UK_{YYYY}_{NN}.sct`` for the target cycle.  Inside the source zip,
+prefer an exact basename match anywhere under the ``UK/Data`` tree.  If the
+upstream release carries a lagging SCT filename, accept one unambiguous main UK
+sector file under ``UK/Data/Sector`` whose basename matches
+``UK_YYYY_NN[a-z].sct`` and write it to the local canonical cycle filename.
 """
 
 from __future__ import annotations
@@ -33,7 +36,8 @@ import tempfile
 import urllib.error
 import urllib.request
 import zipfile
-from pathlib import Path
+from io import BytesIO
+from pathlib import Path, PurePosixPath
 
 from src.airac import AiracCycle
 from src.processing.zip_handler import download_zip
@@ -53,8 +57,11 @@ _SOURCE_ZIP_URL = (
 # [RULE:SCT-RELEASE-TAG] tag pattern: YYYY_NN with optional lowercase letter(s)
 _TAG_RE = re.compile(r"^(\d{4})_(\d{2})([a-z]*)$")
 
-# [RULE:SCT-FILE-PATH] path component and basename inside the source zip
+# [RULE:SCT-FILE-PATH] path components and basename inside the source zip
 _SCT_DATA_DIR = "UK/data/"
+_SCT_DATA_COMPONENTS = ("uk", "data")
+_SCT_SECTOR_COMPONENTS = ("uk", "data", "sector")
+_SCT_MAIN_BASENAME_RE = re.compile(r"^UK_\d{4}_\d{2}[a-z]?\.sct$", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -143,8 +150,10 @@ def _extract_sct(zip_buffer: BytesIO, cycle: AiracCycle, dest_dir: Path) -> Path
     """Extract the SCT file for *cycle* from *zip_buffer* into *dest_dir*.
 
     # [RULE:SCT-FILE-PATH]
-    The file is located by finding a zip entry whose path contains the
-    ``UK/data/`` component and whose basename matches ``UK_{YYYY}_{NN}.sct``.
+    The release tag has already selected the target cycle.  The local file is
+    always written as ``UK_{YYYY}_{NN}.sct``.  The source zip may either contain
+    that exact filename under ``UK/Data`` or one unambiguous lagging main UK SCT
+    filename under ``UK/Data/Sector``.
 
     Extraction is atomic: the file is written to a temp directory first,
     then moved to *dest_dir* only on success.
@@ -158,24 +167,82 @@ def _extract_sct(zip_buffer: BytesIO, cycle: AiracCycle, dest_dir: Path) -> Path
     tmp_dir = Path(tempfile.mkdtemp(dir=dest_dir, prefix=".sct_tmp_"))
     try:
         with zipfile.ZipFile(zip_buffer) as zf:
-            for entry in zf.infolist():
-                normalised = entry.filename.replace("\\", "/")
-                if (
-                    _SCT_DATA_DIR in normalised
-                    and Path(normalised).name == target_basename
-                ):
-                    tmp_path = tmp_dir / target_basename
-                    tmp_path.write_bytes(zf.read(entry.filename))
-                    shutil.move(str(tmp_path), str(final_path))
-                    return final_path
+            entries = zf.infolist()
+            selected = _select_sct_entry(entries, target_basename)
+            if selected is not None:
+                source_name = PurePosixPath(selected.filename.replace("\\", "/")).name
+                if source_name != target_basename:
+                    logger.warning(
+                        "SCT source file %s does not match target cycle name %s; "
+                        "writing canonical local filename because the release tag "
+                        "matches the AIRAC cycle [RULE:SCT-FILE-PATH]",
+                        source_name,
+                        target_basename,
+                    )
+                tmp_path = tmp_dir / target_basename
+                tmp_path.write_bytes(zf.read(selected.filename))
+                shutil.move(str(tmp_path), str(final_path))
+                return final_path
 
         raise SctFetchError(
-            f"SCT file '{target_basename}' not found under '{_SCT_DATA_DIR}' "
-            "in the source zip. The repo structure may have changed. "
+            f"SCT file '{target_basename}' not found under the UK/Data tree "
+            "and no unambiguous fallback UK/Data/Sector/UK_YYYY_NN.sct file "
+            "was found in the source zip. The repo structure may have changed. "
             "[RULE:SCT-FILE-PATH]"
         )
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _path_parts_lower(filename: str) -> tuple[str, ...]:
+    normalised = filename.replace("\\", "/")
+    return tuple(part.lower() for part in PurePosixPath(normalised).parts)
+
+
+def _has_subsequence(parts: tuple[str, ...], expected: tuple[str, ...]) -> bool:
+    width = len(expected)
+    return any(parts[i:i + width] == expected for i in range(len(parts) - width + 1))
+
+
+def _select_sct_entry(
+    entries: list[zipfile.ZipInfo],
+    target_basename: str,
+) -> zipfile.ZipInfo | None:
+    exact_matches: list[zipfile.ZipInfo] = []
+    fallback_matches: list[zipfile.ZipInfo] = []
+
+    for entry in entries:
+        if entry.is_dir():
+            continue
+        normalised = entry.filename.replace("\\", "/")
+        name = PurePosixPath(normalised).name
+        parts = _path_parts_lower(normalised)
+        if not _has_subsequence(parts, _SCT_DATA_COMPONENTS):
+            continue
+        if name == target_basename:
+            exact_matches.append(entry)
+            continue
+        if (
+            _has_subsequence(parts, _SCT_SECTOR_COMPONENTS)
+            and _SCT_MAIN_BASENAME_RE.match(name)
+        ):
+            fallback_matches.append(entry)
+
+    if exact_matches:
+        exact_matches.sort(key=lambda e: e.filename)
+        return exact_matches[0]
+
+    if len(fallback_matches) == 1:
+        return fallback_matches[0]
+
+    if len(fallback_matches) > 1:
+        names = ", ".join(sorted(entry.filename for entry in fallback_matches))
+        raise SctFetchError(
+            "Multiple fallback SCT candidates found under UK/Data/Sector; "
+            f"cannot choose safely: {names} [RULE:SCT-FILE-PATH]"
+        )
+
+    return None
 
 
 # ---------------------------------------------------------------------------

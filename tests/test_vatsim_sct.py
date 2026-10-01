@@ -47,7 +47,15 @@ CYCLE_2601 = AiracCycle(
     expiry_date=date(2026, 2, 18),
 )
 
+CYCLE_2607 = AiracCycle(
+    year=2026,
+    number=7,
+    effective_date=date(2026, 7, 9),
+    expiry_date=date(2026, 8, 5),
+)
+
 SCT_BASENAME_2602 = "UK_2026_02.sct"
+SCT_BASENAME_2607 = "UK_2026_07.sct"
 SCT_CONTENT = b"; UK sector file content\n[INFO]\nUK_2026_02\n"
 
 
@@ -231,8 +239,62 @@ class TestExtractSct:
         result = _extract_sct(buf, CYCLE_2602, tmp_path)
         assert result.read_bytes() == SCT_CONTENT
 
+    def test_exact_match_is_case_insensitive_for_data_path(self, tmp_path):
+        buf = _make_zip_with_sct(
+            SCT_BASENAME_2602,
+            zip_path=f"repo-root/UK/Data/{SCT_BASENAME_2602}",
+        )
+        result = _extract_sct(buf, CYCLE_2602, tmp_path)
+        assert result == tmp_path / SCT_BASENAME_2602
+
+    def test_lagging_upstream_sector_filename_is_canonicalized(self, tmp_path):
+        """The 2026_07 release used UK/Data/Sector/UK_2026_05.sct upstream."""
+        source_content = b"; current 2026_07 release sector content\n"
+        buf = _make_zip_with_sct(
+            "UK_2026_05.sct",
+            content=source_content,
+            zip_path="uk-controller-pack-2026_07/UK/Data/Sector/UK_2026_05.sct",
+        )
+        result = _extract_sct(buf, CYCLE_2607, tmp_path)
+        assert result == tmp_path / SCT_BASENAME_2607
+        assert result.read_bytes() == source_content
+        assert not (tmp_path / "UK_2026_05.sct").exists()
+
+    def test_exact_match_wins_over_lagging_sector_fallback(self, tmp_path):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr(
+                "repo/UK/Data/Sector/UK_2026_05.sct",
+                b"fallback content",
+            )
+            zf.writestr(
+                "repo/UK/Data/Sector/UK_2026_07.sct",
+                b"exact content",
+            )
+        buf.seek(0)
+        result = _extract_sct(buf, CYCLE_2607, tmp_path)
+        assert result == tmp_path / SCT_BASENAME_2607
+        assert result.read_bytes() == b"exact content"
+
+    def test_multiple_lagging_sector_candidates_raise(self, tmp_path):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("repo/UK/Data/Sector/UK_2026_04.sct", b"one")
+            zf.writestr("repo/UK/Data/Sector/UK_2026_05.sct", b"two")
+        buf.seek(0)
+        with pytest.raises(SctFetchError, match="Multiple fallback SCT candidates"):
+            _extract_sct(buf, CYCLE_2607, tmp_path)
+
+    def test_lagging_filename_outside_sector_dir_not_extracted(self, tmp_path):
+        buf = _make_zip_with_sct(
+            "UK_2026_05.sct",
+            zip_path="repo/UK/Data/Archive/UK_2026_05.sct",
+        )
+        with pytest.raises(SctFetchError, match=SCT_BASENAME_2607):
+            _extract_sct(buf, CYCLE_2607, tmp_path)
+
     def test_wrong_basename_not_extracted(self, tmp_path):
-        """A file in UK/data/ with a different name is not mistakenly extracted."""
+        """A different filename outside UK/Data/Sector is not a fallback."""
         buf = _make_zip_with_sct(
             "UK_2026_01.sct",  # wrong cycle
             zip_path=f"repo/{_SCT_DATA_DIR}UK_2026_01.sct",
